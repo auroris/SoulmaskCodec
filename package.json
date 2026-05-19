@@ -1,6 +1,6 @@
 {
   "name": "wscodec",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Pure-JS codec for Soulmask actor_data property streams (UE 4.27 FPropertyTag wire format). Zero runtime dependencies. Accepts uncompressed bytes, returns JS objects, and vice versa. Round-trip byte-identical against every actor.",
   "type": "module",
   "main": "./wscodec.mjs",
