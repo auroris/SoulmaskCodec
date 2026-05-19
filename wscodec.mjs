@@ -171,12 +171,22 @@ export class UnrealBlob {
    * appending `bodyTrailing` after the None terminator + 4-byte FName.Number
    * trailer that `writePropertyStream` emits.
    *
+   * Options:
+   *   `recomputeSizes` — override `this._recomputeSizes`. When truthy, every
+   *     PropertyTag.size field (and ArrayValue innerTag.size) is rewritten
+   *     from the actual encoded value byte count. Required after edits that
+   *     change variable-length fields (FString contents, FText, MapValue
+   *     contents, etc.); without it, a stale size field leaves the Soulmask
+   *     reader misaligned and the blob is rejected on load. The default is
+   *     to honor `this._recomputeSizes`; jsonToBlob sets that to true so
+   *     the JSON pipeline always recomputes.
+   *
    * Throws if `_dirty` is true AND `error` is set: re-emitting would produce
    * a malformed stream (the property tree is empty after a structural
    * failure). Clear `.error` first if you intentionally want to emit from
    * an externally-constructed properties array.
    */
-  serialize() {
+  serialize({ recomputeSizes } = {}) {
     if (!this._dirty && this._raw instanceof Uint8Array) return this._raw;
 
     if (this.error != null) {
@@ -187,6 +197,7 @@ export class UnrealBlob {
     }
 
     const w = new Writer(this._raw?.length || 256);
+    if (recomputeSizes ?? this._recomputeSizes) w._wsRecomputeSizes = true;
     w.writeUint32(this.versionTag);
     writePropertyStream(w, this.properties, /*emitTerminatorTrailer=*/true);
     if (this.bodyTrailing && this.bodyTrailing.length > 0) {

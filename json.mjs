@@ -272,13 +272,11 @@ function arrayValueToJSON(v, tag) {
   if (v._arrayInnerTag) j.innerTag = tagToJSON(v._arrayInnerTag);
   if (v._perElementTrailings) {
     // Per-element placement-binary block (JianZhuInstYuanXings). Each entry is
-    // { header: Uint8Array, sections: [{stride, count, data: Uint8Array}] } or null.
+    // either null OR { transforms: [[16 floats], …], ids: [u32, …], aux: [[16 floats], …] }.
+    // Header and strides are constants on the wire — synthesized on write.
     j.perElementTrailings = v._perElementTrailings.map(t => {
       if (t == null) return null;
-      return {
-        header: b64encode(t.header),
-        sections: t.sections.map(s => ({ stride: s.stride, count: s.count, data: b64encode(s.data) })),
-      };
+      return { transforms: t.transforms, ids: t.ids, aux: t.aux };
     });
   }
   return j;
@@ -291,10 +289,7 @@ function arrayValueFromJSON(j, tag) {
   if (Array.isArray(j.perElementTrailings)) {
     perElementTrailings = j.perElementTrailings.map(t => {
       if (t == null) return null;
-      return {
-        header: b64decode(t.header),
-        sections: t.sections.map(s => ({ stride: s.stride, count: s.count, data: b64decode(s.data) })),
-      };
+      return { transforms: t.transforms, ids: t.ids, aux: t.aux };
     });
   }
   return new ArrayValue({ elements, innerTag, perElementTrailings });
@@ -446,6 +441,9 @@ function fTextToJSON(v) {
     } else {
       j.sourceString = null;
     }
+  } else if (v.historyType === 1) {
+    j.sourceFmt = fTextToJSON(v.sourceFmt);
+    j.arguments = v.arguments.map(a => fTextNamedArgToJSON(a));
   } else if (v.historyType === 2) {
     j.sourceFmt = fTextToJSON(v.sourceFmt);
     j.arguments = v.arguments.map(a => fTextArgToJSON(a));
@@ -481,6 +479,13 @@ function fTextFromJSON(j) {
       sourceString: j.sourceString ?? null, sourceStringIsNull: !!j.sourceStringIsNull,
     });
   }
+  if (ht === 1) {
+    return new FTextValue({
+      flags: j.flags, historyType: 1,
+      sourceFmt: fTextFromJSON(j.sourceFmt),
+      arguments: j.arguments.map(a => fTextNamedArgFromJSON(a)),
+    });
+  }
   if (ht === 2) {
     return new FTextValue({
       flags: j.flags, historyType: 2,
@@ -509,6 +514,22 @@ function fTextArgToJSON(a) {
 function fTextArgFromJSON(a) {
   if (a.type === 4) return { type: 4, value: fTextFromJSON(a.value) };
   return { type: a.type, value: a.value };
+}
+// Named-format arg: same as positional but with a key FString prefix.
+function fTextNamedArgToJSON(a) {
+  const j = { key: a.key };
+  if (a.keyIsNull) j.keyIsNull = true;
+  j.type = a.type;
+  j.value = a.type === 4 ? fTextToJSON(a.value) : a.value;
+  return j;
+}
+function fTextNamedArgFromJSON(a) {
+  return {
+    key: a.key,
+    keyIsNull: !!a.keyIsNull,
+    type: a.type,
+    value: a.type === 4 ? fTextFromJSON(a.value) : a.value,
+  };
 }
 
 // ── Property ────────────────────────────────────────────────────────────────
@@ -540,7 +561,9 @@ export function jsonToBlob(j) {
     terminated: !!j.terminated,
     bodyTrailing: j.bodyTrailing ? b64decode(j.bodyTrailing) : null,
   });
-  blob._dirty = true;       // force re-encode path on serialize()
+  blob._dirty = true;            // force re-encode path on serialize()
+  blob._recomputeSizes = true;   // JSON is the editing path; tag.size must
+                                 // be rewritten from actual value bytes.
   return blob;
 }
 

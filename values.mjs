@@ -168,6 +168,9 @@ export class FTextValue {
       this._keyIsNull = keyIsNull;
       this.sourceString = sourceString ?? null;
       this._sourceStringIsNull = sourceStringIsNull;
+    } else if (historyType === 1) {
+      this.sourceFmt = sourceFmt ?? null;   // FTextValue (the pattern)
+      this.arguments = args ?? [];          // [{key, keyIsNull, type, value}]
     } else if (historyType === 2) {
       this.sourceFmt = sourceFmt ?? null;   // FTextValue (the pattern)
       this.arguments = args ?? [];          // [{type, value}]
@@ -185,6 +188,7 @@ export class FTextValue {
   get text() {
     if (this.historyType === -1) return this.displayString;
     if (this.historyType === 0) return this.sourceString ?? null;
+    if (this.historyType === 1) return this.sourceFmt?.text ?? null;
     if (this.historyType === 2) return this.sourceFmt?.text ?? null;
     if (this.historyType === 4) {
       const v = this.sourceValue?.value;

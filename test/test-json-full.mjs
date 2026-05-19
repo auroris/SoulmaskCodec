@@ -84,7 +84,20 @@ for (const row of rows) {
     failures.push({ serial: row.actor_serial, phase: 'jsonToBlob-throw', msg: e.message });
     continue;
   }
-  let re;
+  // jsonToBlob sets _recomputeSizes=true (the JSON pipeline is the editing
+  // pipeline, so tag.size must be derived from actual value bytes). To
+  // compare against the original meaningfully we encode the original with
+  // the same recompute setting; otherwise the comparison degenerates into
+  // "did we accidentally preserve every inflated tag.size from the wire".
+  let reOrig, re;
+  try {
+    blob._dirty = true; blob._recomputeSizes = true;
+    reOrig = blob.serialize();
+  } catch (e) {
+    stats.serializeThrew++;
+    failures.push({ serial: row.actor_serial, phase: 'serialize-orig-throw', msg: e.message });
+    continue;
+  }
   try {
     re = blob2.serialize();
   } catch (e) {
@@ -93,17 +106,17 @@ for (const row of rows) {
     continue;
   }
 
-  totalOrigBytes += inner.length;
+  totalOrigBytes += reOrig.length;
   totalJsonBytes += jstr.length;
 
-  if (re.length !== inner.length) {
+  if (re.length !== reOrig.length) {
     stats.lengthMismatch++;
-    failures.push({ serial: row.actor_serial, phase: 'length-mismatch', msg: `re=${re.length} orig=${inner.length}` });
+    failures.push({ serial: row.actor_serial, phase: 'length-mismatch', msg: `re=${re.length} reOrig=${reOrig.length}` });
     continue;
   }
   let firstDiff = -1;
   for (let i = 0; i < re.length; i++) {
-    if (re[i] !== inner[i]) { firstDiff = i; break; }
+    if (re[i] !== reOrig[i]) { firstDiff = i; break; }
   }
   if (firstDiff >= 0) {
     stats.byteMismatch++;
@@ -114,8 +127,8 @@ for (const row of rows) {
     failures.push({
       serial: row.actor_serial,
       phase: 'byte-mismatch',
-      msg: `@0x${firstDiff.toString(16)}: orig=0x${inner[firstDiff].toString(16).padStart(2,'0')} re=0x${re[firstDiff].toString(16).padStart(2,'0')}`,
-      context: { orig: fmt(inner), re: fmt(re), ctxStart },
+      msg: `@0x${firstDiff.toString(16)}: orig=0x${reOrig[firstDiff].toString(16).padStart(2,'0')} re=0x${re[firstDiff].toString(16).padStart(2,'0')}`,
+      context: { orig: fmt(reOrig), re: fmt(re), ctxStart },
     });
     continue;
   }

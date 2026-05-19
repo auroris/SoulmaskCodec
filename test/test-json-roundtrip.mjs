@@ -200,7 +200,11 @@ for (const [label] of criteria) {
     jsonBytes = jstr.length;
     const blob2 = jsonStringToBlob(jstr);
     const reBytes = blob2.serialize();
-    const cmp = compareBytes(inner, reBytes);
+    // Compare against the original encoded with the SAME recompute setting,
+    // not the wire bytes (which may carry inflated tag.sizes).
+    blob._dirty = true; blob._recomputeSizes = true;
+    const reOrig = blob.serialize();
+    const cmp = compareBytes(reOrig, reBytes);
     result = { cmp, reBytes };
   } catch (e) {
     result = { error: e };

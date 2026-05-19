@@ -25,6 +25,7 @@
  * elements, embedded object data) do NOT.
  */
 
+import { Writer }                                             from './io.mjs';
 import { FName, FGuid }                                       from './primitives.mjs';
 import { StructValue, STRUCT_HANDLERS }                       from './structs.mjs';
 import { ObjectRef, SoftObjectRef, FTextValue, OpaqueValue }  from './values.mjs';
@@ -291,6 +292,35 @@ function readFText(cursor, sizeHint) {
         sourceString: ssFS.value, sourceStringIsNull: ssFS.isNull,
       });
     }
+    if (historyType === 1) {
+      // NamedFormat (FTextHistory_NamedFormat): a format-pattern FText plus a
+      // TMap<FString, FFormatArgumentValue>. Wire shape:
+      //   FText  SourceFmt
+      //   int32  NumArguments
+      //   for each: FString Key, int8 ContentType, value-by-type
+      // ContentType codes match historyType=2 (0=Int64 1=UInt64 2=Float32
+      // 3=Float64 4=Text 5=Gender). Soulmask uses this for named placeholders
+      // like "X={X} Y={Y} Z={Z}" in ParamArrayTxt elements of JingYingRiZhiList.
+      const sourceFmt = readFText(cursor, Infinity);
+      const numArgs = cursor.readInt32();
+      const args = [];
+      for (let i = 0; i < numArgs; i++) {
+        const keyFS = cursor.readFString();
+        const type = cursor.readInt8();
+        let value;
+        switch (type) {
+          case 0: value = cursor.readInt64().toString();  break;
+          case 1: value = cursor.readUint64().toString(); break;
+          case 2: value = cursor.readFloat32();           break;
+          case 3: value = cursor.readFloat64();           break;
+          case 4: value = readFText(cursor, Infinity);    break;
+          case 5: value = cursor.readInt8();              break;
+          default: throw new Error(`readFText: unknown NamedFormat ContentType ${type}`);
+        }
+        args.push({ key: keyFS.value, keyIsNull: keyFS.isNull, type, value });
+      }
+      return new FTextValue({ flags, historyType: 1, sourceFmt, arguments: args });
+    }
     if (historyType === 2) {
       // ArgumentFormat: a format-pattern FText plus an ordered argument list.
       // Each argument is a ContentType byte (EFormatArgumentType) followed by
@@ -393,6 +423,22 @@ function writeFText(writer, value) {
     writer.writeFString(value.namespace ?? '',    null, value._namespaceIsNull);
     writer.writeFString(value.key ?? '',          null, value._keyIsNull);
     writer.writeFString(value.sourceString ?? '', null, value._sourceStringIsNull);
+  } else if (value.historyType === 1) {
+    writeFText(writer, value.sourceFmt);
+    writer.writeInt32(value.arguments.length);
+    for (const arg of value.arguments) {
+      writer.writeFString(arg.key ?? '', null, arg.keyIsNull);
+      writer.writeInt8(arg.type);
+      switch (arg.type) {
+        case 0: writer.writeInt64(arg.value);   break;
+        case 1: writer.writeUint64(arg.value);  break;
+        case 2: writer.writeFloat32(arg.value); break;
+        case 3: writer.writeFloat64(arg.value); break;
+        case 4: writeFText(writer, arg.value);  break;
+        case 5: writer.writeInt8(arg.value);    break;
+        default: throw new Error(`writeFText: unknown NamedFormat ContentType ${arg.type}`);
+      }
+    }
   } else if (value.historyType === 2) {
     writeFText(writer, value.sourceFmt);
     writer.writeInt32(value.arguments.length);
@@ -593,19 +639,23 @@ function readArrayValue(cursor, tag, sizeHint) {
  * yuan-xing element is followed by a fixed-shape block:
  *
  *   [8 bytes zero header]
- *   [u32 stride=64] [u32 count]  [count×64 bytes]   world 4×4 transforms (per placed piece)
- *   [u32 stride= 4] [u32 count]  [count× 4 bytes]   per-piece u32 ids
- *   [u32 stride=64] [u32 count]  [count×64 bytes]   per-piece aux (bbox + scale-ish floats)
+ *   [u32 stride=64] [u32 count]  [count × 16 float32]   world 4×4 transforms (per placed piece)
+ *   [u32 stride= 4] [u32 count]  [count × u32]          per-piece u32 ids
+ *   [u32 stride=64] [u32 count]  [count × 16 float32]   per-piece aux (bbox + scale-ish floats)
  *
- * Returns { header, sections } on success. Returns null (cursor rolled back)
- * when the bytes don't match. Non-JianZhuInstYuanXings ObjectProperty arrays
- * have no such block, so peeking-and-rolling-back keeps them unaffected.
+ * Returns { transforms, ids, aux } on success: arrays of decoded values
+ * (rather than raw byte slices). Returns null (cursor rolled back) when the
+ * bytes don't match. Non-JianZhuInstYuanXings ObjectProperty arrays have no
+ * such block, so peeking-and-rolling-back keeps them unaffected.
+ *
+ * The 8-byte zero header and the fixed strides (64/4/64) are synthesized on
+ * write — no field in the returned object carries them.
  *
  * Verified by in-game experiment 2026-05-18: numElements counts UNIQUE
- * prototypes (foundation, wall, door frame, …); section 0/1 counts are the
- * placed-piece count for that prototype; section 2 count is typically that
- * count or one greater. The earlier "single trailing block after all
- * elements" model was wrong; these blocks are interleaved per element.
+ * prototypes (foundation, wall, door frame, …); transforms.length is the
+ * placed-piece count for that prototype; aux.length is typically the same
+ * or one greater. The earlier "single trailing block after all elements"
+ * model was wrong; these blocks are interleaved per element.
  */
 function tryReadObjectArrayPerElementBlock(cursor, endOff) {
   const start = cursor.pos();
@@ -618,8 +668,7 @@ function tryReadObjectArrayPerElementBlock(cursor, endOff) {
   if (cursor.dv.getUint32(start + 8, true) !== 64) return null;
 
   try {
-    cursor.skip(8);
-    const header = cursor.bytes.subarray(start, start + 8).slice();
+    cursor.skip(8);   // zero header
     const sections = [];
     const expected = [64, 4, 64];
     for (let i = 0; i < 3; i++) {
@@ -630,9 +679,26 @@ function tryReadObjectArrayPerElementBlock(cursor, endOff) {
       if (count > 1_000_000) throw new Error(`implausible count ${count}`);
       const dataBytes = stride * count;
       if (cursor.pos() + dataBytes > endOff) throw new Error(`section ${i} data overruns budget`);
-      sections.push({ stride, count, data: cursor.readBytes(dataBytes).slice() });
+      if (i === 1) {
+        const ids = new Array(count);
+        for (let k = 0; k < count; k++) ids[k] = cursor.readUint32();
+        sections.push(ids);
+      } else {
+        // 16 float32 per element (4×4 matrix, row-major in UE's FMatrix layout).
+        // Non-canonical NaN bit patterns are common in Soulmask aux data
+        // (observed 0xFFFFFFFF as "invalid" sentinel) and would collapse to
+        // canonical 0x7FC00000 if round-tripped via a JS Number, so we
+        // capture them as { $nanBits } wrappers instead.
+        const arr = new Array(count);
+        for (let k = 0; k < count; k++) {
+          const m = new Array(16);
+          for (let j = 0; j < 16; j++) m[j] = readFloat32PreservingNan(cursor);
+          arr[k] = m;
+        }
+        sections.push(arr);
+      }
     }
-    return { header, sections };
+    return { transforms: sections[0], ids: sections[1], aux: sections[2] };
   } catch {
     cursor.seek(start);
     return null;
@@ -640,11 +706,45 @@ function tryReadObjectArrayPerElementBlock(cursor, endOff) {
 }
 
 function writeObjectArrayPerElementBlock(writer, block) {
-  writer.writeBytes(block.header);
-  for (const s of block.sections) {
-    writer.writeUint32(s.stride);
-    writer.writeUint32(s.count);
-    writer.writeBytes(s.data);
+  // 8-byte zero header.
+  writer.writeUint32(0);
+  writer.writeUint32(0);
+  // Section 0: transforms (count × 16 float32).
+  writer.writeUint32(64);
+  writer.writeUint32(block.transforms.length);
+  for (const m of block.transforms) for (const f of m) writeFloat32PreservingNan(writer, f);
+  // Section 1: ids (count × u32).
+  writer.writeUint32(4);
+  writer.writeUint32(block.ids.length);
+  for (const id of block.ids) writer.writeUint32(id);
+  // Section 2: aux (count × 16 float32).
+  writer.writeUint32(64);
+  writer.writeUint32(block.aux.length);
+  for (const m of block.aux) for (const f of m) writeFloat32PreservingNan(writer, f);
+}
+
+// Float32 helpers that preserve non-canonical NaN bit patterns. JavaScript's
+// Number type collapses all NaN bit patterns into the canonical 0x7FC00000
+// on any DataView.setFloat32 call, so a wire NaN like 0xFFFFFFFF (observed in
+// Soulmask JianZhuInstYuanXings aux data) would not round-trip if we used
+// readFloat32 / writeFloat32 directly. We instead carry NaN-bit-patterns as
+// { $nanBits: u32 } wrapper objects.
+function readFloat32PreservingNan(cursor) {
+  const bits = cursor.dv.getUint32(cursor.offset, true);
+  // NaN: exponent all 1s AND mantissa non-zero. The single "canonical NaN"
+  // (0x7FC00000) is allowed to round-trip through Number, but every other
+  // NaN bit pattern needs the wrapper.
+  if ((bits & 0x7F800000) === 0x7F800000 && (bits & 0x007FFFFF) !== 0 && bits !== 0x7FC00000) {
+    cursor.offset += 4;
+    return { $nanBits: bits >>> 0 };
+  }
+  return cursor.readFloat32();
+}
+function writeFloat32PreservingNan(writer, f) {
+  if (f !== null && typeof f === 'object' && '$nanBits' in f) {
+    writer.writeUint32(f.$nanBits >>> 0);
+  } else {
+    writer.writeFloat32(f);
   }
 }
 
@@ -656,14 +756,33 @@ function isObjectInnerType(t) {
 
 function writeArrayValue(writer, tag, value) {
   const innerType = tag.innerType.value;
+  const recompute = !!writer._wsRecomputeSizes;
   writer.writeInt32(value.elements.length);
   if (innerType === 'StructProperty') {
-    value._arrayInnerTag.write(writer);
     const structName = value._arrayInnerTag.structName.value;
     const handler = STRUCT_HANDLERS[structName];
-    for (const e of value.elements) {
-      if (handler) handler.write(writer, e.value);
-      else writeNestedPropertyStream(writer, e.value);
+    // On recompute, set innerTag.size to the encoded size of element 0.
+    // All array-of-struct elements share the same innerTag, and stock UE
+    // uses one size value as a hint for the whole element shape. Self-
+    // delimiting struct streams (None terminator) make the exact value less
+    // critical for reading, but writing the truthful size keeps validators
+    // happy.
+    let origInnerSize = value._arrayInnerTag.size;
+    if (recompute && value.elements.length > 0) {
+      const sub = new Writer(64);
+      sub._wsRecomputeSizes = true;
+      if (handler) handler.write(sub, value.elements[0].value);
+      else writeNestedPropertyStream(sub, value.elements[0].value);
+      value._arrayInnerTag.size = sub.finalize().length;
+    }
+    try {
+      value._arrayInnerTag.write(writer);
+      for (const e of value.elements) {
+        if (handler) handler.write(writer, e.value);
+        else writeNestedPropertyStream(writer, e.value);
+      }
+    } finally {
+      if (recompute) value._arrayInnerTag.size = origInnerSize;
     }
     return;
   }
@@ -1139,12 +1258,40 @@ export function readPropertyStream(cursor, endOffset = Infinity, consumeTerminat
 }
 
 export function writePropertyStream(writer, properties, emitTerminatorTrailer = false) {
+  // When the writer carries the recompute flag, we encode each property's
+  // value into a temporary sub-buffer, then overwrite tag.size with the
+  // sub-buffer's length before writing the tag. This is required for edits:
+  // the wire stores tag.size literally, and a stale value (e.g. after
+  // lengthening an FString) leaves the next reader misaligned.
+  //
+  // The flag propagates to sub-buffers so nested streams inside StructValue /
+  // ObjectRef / Array<Struct> also get recomputed sizes. Direct callers that
+  // want byte-identical preservation (the test-roundtrip.mjs path) leave the
+  // flag unset; UnrealBlob.serialize sets it from blob._recomputeSizes.
+  const recompute = !!writer._wsRecomputeSizes;
   for (const p of properties) {
     if (p._sizeMismatch) {
       throw new Error(`writePropertyStream: property '${p.name}' has _sizeMismatch (${JSON.stringify(p._sizeMismatch)}); cannot safely re-emit`);
     }
-    p.tag.write(writer);
-    writeValue(writer, p.tag, p.value);
+    if (recompute) {
+      const sub = new Writer(64);
+      sub._wsRecomputeSizes = true;
+      writeValue(sub, p.tag, p.value);
+      const valueBytes = sub.finalize();
+      const origSize = p.tag.size;
+      p.tag.size = valueBytes.length;
+      try {
+        p.tag.write(writer);
+        writer.writeBytes(valueBytes);
+      } finally {
+        // Restore so we don't mutate the blob's tags across multiple
+        // serialize() calls. A subsequent recompute will rewrite them.
+        p.tag.size = origSize;
+      }
+    } else {
+      p.tag.write(writer);
+      writeValue(writer, p.tag, p.value);
+    }
   }
   new FName('None').write(writer);
   if (emitTerminatorTrailer) writer.writeInt32(0);
