@@ -30,7 +30,7 @@ import { StructValue, STRUCT_HANDLERS }                       from './structs.mj
 import { ObjectRef, SoftObjectRef, FTextValue, OpaqueValue }  from './values.mjs';
 
 // ==========================================================================
-// PropertyTag — the header preceding each property's value bytes.
+// PropertyTag: the header preceding each property's value bytes.
 // ==========================================================================
 export class PropertyTag {
   constructor(fields = {}) {
@@ -124,7 +124,7 @@ export class MapValue {
 }
 
 // ==========================================================================
-// Property — one tag + its decoded value.
+// Property: one tag + its decoded value.
 // ==========================================================================
 export class Property {
   constructor(tag, value, { sizeMismatch = null } = {}) {
@@ -137,7 +137,7 @@ export class Property {
 }
 
 // ==========================================================================
-// Value codec — dispatches on tag.type.value.
+// Value codec: dispatches on tag.type.value.
 //
 // sizeHint is the tag's Size field (bytes following the tag). Containers
 // (Array/Set/Map) and StructProperty use it as the byte budget for nested
@@ -163,7 +163,7 @@ export function readValue(cursor, tag, sizeHint) {
     case 'ClassProperty':
     case 'WeakObjectProperty':
     case 'LazyObjectProperty':
-    case 'WSObjectProperty':           // Soulmask-specific alias (per BLOB_FORMAT.md)
+    case 'WSObjectProperty':           // Soulmask alias for ObjectProperty (same wire layout, different tag name)
       return readObjectValue(cursor, sizeHint);
     case 'SoftObjectProperty':
     case 'SoftClassProperty':
@@ -207,7 +207,7 @@ export function readValue(cursor, tag, sizeHint) {
 }
 
 export function writeValue(writer, tag, value) {
-  // Decode may have fallen back to OpaqueValue for any property type —
+  // Decode may have fallen back to OpaqueValue for any property type:
   // Array/Set/Map/Struct/Text decode failures, unknown property types,
   // overshoot recoveries, etc. Emit the captured bytes verbatim so the
   // outer stream stays aligned regardless of which slot held the opaque.
@@ -279,7 +279,7 @@ function readFText(cursor, sizeHint) {
     if (historyType === 0) {
       // Base / localized: namespace + key + source string. Empty strings on
       // the wire may use either null-form (SaveNum=0) or empty-with-terminator
-      // (SaveNum=1) — capture `isNull` per-field so the writer reproduces the
+      // (SaveNum=1). Capture `isNull` per-field so the writer reproduces the
       // exact wire form.
       const nsFS  = cursor.readFString();
       const kFS   = cursor.readFString();
@@ -297,7 +297,7 @@ function readFText(cursor, sizeHint) {
       // the value for that type:
       //   0=Int(int64)  1=UInt(uint64)  2=Float(f32)  3=Double(f64)
       //   4=Text(FText, recursive)  5=Gender(int8)
-      // No argument names on the wire — arguments are positional ({0}, {1} …).
+      // No argument names on the wire; arguments are positional ({0}, {1} ...).
       const sourceFmt = readFText(cursor, Infinity);
       const numArgs = cursor.readInt32();
       const args = [];
@@ -328,7 +328,7 @@ function readFText(cursor, sizeHint) {
       // Inside FNumberFormattingOptions, AlwaysSign and UseGrouping are also
       // uint32 booleans. Only RoundingMode (int8) and the four digit-count
       // fields (int32) follow the modern sizes. This matches the actual wire
-      // bytes — empirically MaxIntDigits = ~324 (close to DBL_MAX_10_EXP+1
+      // bytes: empirically MaxIntDigits = ~324 (close to DBL_MAX_10_EXP+1
       // = 309) and MaxFracDigits = 3 (UE default) under this interpretation.
       const argType = cursor.readInt8();
       let argValue;
@@ -366,7 +366,7 @@ function readFText(cursor, sizeHint) {
     }
     // Unknown history type: preserve remaining bytes verbatim for round-trip.
     // When called from an array-element context sizeHint is Infinity because
-    // the per-element byte budget is unknown — throw so the callers can decide
+    // the per-element byte budget is unknown; throw so the callers can decide
     // whether to fall back to OpaqueValue at the element or array level.
     if (!isFinite(sizeHint)) throw new Error(`readFText: unimplemented historyType ${historyType} (no size budget; cannot store raw bytes)`);
     const remaining = sizeHint - (cursor.pos() - start);
@@ -420,7 +420,7 @@ function writeFText(writer, value) {
       case 5: writer.writeInt64(sv.value);   break;
       default: throw new Error(`writeFText: unknown FFormatArgumentValue type ${sv.type} in AsNumber`);
     }
-    // Legacy uint32 booleans — see readFText AsNumber for rationale.
+    // Legacy uint32 booleans (see readFText AsNumber for rationale).
     const hasFormatOptions = value.formatOptions != null;
     writer.writeUint32(hasFormatOptions ? 1 : 0);
     if (hasFormatOptions) {
@@ -459,7 +459,7 @@ function writeFText(writer, value) {
 // preserves the wire's choice between null-form (SaveNum=0, 4 bytes) and
 // empty-with-terminator (SaveNum=1 plus 1-byte NUL, 5 bytes). The previous
 // version always wrote `writeFString(this.path)` for ObjectRef and emitted
-// a 4-byte null FString even for kind-only values — silently inflating the
+// a 4-byte null FString even for kind-only values, silently inflating the
 // encoded blob by 4 B for every kind-only reference.
 function readObjectValue(cursor, sizeHint) {
   const start = cursor.pos();
@@ -471,7 +471,7 @@ function readObjectValue(cursor, sizeHint) {
     }
     // Soulmask kind=0x01 (hard actor reference, e.g. HBindBGCompActor on
     // NPC pawns) prepends a 4-byte field between the kind byte and the
-    // path FString. Observed value is always 1; semantic unknown — captured
+    // path FString. Observed value is always 1; semantic unknown. Captured
     // verbatim and replayed on write. Without this branch the reader treats
     // those four bytes as the path FString's SaveNum, which overshoots the
     // budget and falls back to OpaqueValue (the symptom that hid every
@@ -484,7 +484,7 @@ function readObjectValue(cursor, sizeHint) {
       }
     }
     const pathFS = cursor.readFString();
-    // Guard against path FStrings whose SaveNum overshoots the value budget —
+    // Guard against path FStrings whose SaveNum overshoots the value budget:
     // this happens for properties whose format differs from kind+path+... and
     // whose first "path" bytes happen to encode a huge length.
     if (cursor.pos() - start > sizeHint) throw new Error('path FString exceeded value budget');
@@ -598,14 +598,14 @@ function readArrayValue(cursor, tag, sizeHint) {
  *   [u32 stride=64] [u32 count]  [count×64 bytes]   per-piece aux (bbox + scale-ish floats)
  *
  * Returns { header, sections } on success. Returns null (cursor rolled back)
- * when the bytes don't match — non-JianZhuInstYuanXings ObjectProperty arrays
+ * when the bytes don't match. Non-JianZhuInstYuanXings ObjectProperty arrays
  * have no such block, so peeking-and-rolling-back keeps them unaffected.
  *
  * Verified by in-game experiment 2026-05-18: numElements counts UNIQUE
  * prototypes (foundation, wall, door frame, …); section 0/1 counts are the
  * placed-piece count for that prototype; section 2 count is typically that
  * count or one greater. The earlier "single trailing block after all
- * elements" model was wrong — these blocks are interleaved per element.
+ * elements" model was wrong; these blocks are interleaved per element.
  */
 function tryReadObjectArrayPerElementBlock(cursor, endOff) {
   const start = cursor.pos();
@@ -688,7 +688,7 @@ function readSetValue(cursor, tag) {
 // Set elements for StructProperty inner type are raw binary structs with no
 // inner PropertyTag wrapper (unlike ArrayProperty<StructProperty>, which does
 // have one). Every observed Set<StructProperty> in world.db uses 16-byte Guids
-// as elements — the same assumption MapProperty makes for Struct keys.
+// as elements: the same assumption MapProperty makes for Struct keys.
 function readSetElement(cursor, innerType) {
   if (innerType === 'StructProperty') return FGuid.read(cursor).value;
   return readArrayElement(cursor, innerType);
@@ -737,7 +737,7 @@ function writeMapValue(writer, tag, value) {
 
 /**
  * Map element (one key or one value) when the map's inner/value type is
- * StructProperty — Soulmask uses several conventions that diverge from
+ * StructProperty: Soulmask uses several conventions that diverge from
  * stock UE 4.27 here:
  *
  *   Key  (StructProperty)  → a raw 16-byte FGuid. The map tag declares
@@ -751,7 +751,7 @@ function writeMapValue(writer, tag, value) {
  *                            `GeRenJianZhuYingHuoList`, `GeRenMapRiZhi`)
  *                            OR a raw 16-byte FGuid (`PlayerGongHuiMap`,
  *                            a player→guild membership lookup).
- *                            We sniff which by peeking ahead — a
+ *                            We sniff which by peeking ahead. A
  *                            property stream starts with an FString
  *                            length prefix for the first tag's name
  *                            (small positive int, body is identifier
@@ -767,7 +767,7 @@ function writeMapValue(writer, tag, value) {
  * NOT match the actual byte span of the data section (observed:
  * tag.size=632838, actual=636422 for a populated GongHuiMap). The
  * decoder advances the cursor based on pair count + per-pair shape,
- * NOT the tag.size — which is why this works despite the size lie.
+ * NOT the tag.size, which is why this works despite the size lie.
  */
 function readMapElement(cursor, type, isKey) {
   if (type !== 'StructProperty') return readArrayElement(cursor, type);
@@ -798,17 +798,25 @@ function writeMapElement(writer, type, value, isKey) {
 
 /**
  * Peek the next bytes of `cursor` (without advancing): do they look like
- * the start of a PropertyTag — i.e. an FString that names a property?
+ * the start of a PropertyTag (i.e. an FString that names a property)?
  *
  * A property name FString is:
  *   - int32 SaveNum > 0 and reasonably small (<= 64 chars in Soulmask)
  *   - SaveNum bytes of ANSI body whose last byte is NUL
  *   - body chars (minus NUL) are identifier-safe: A-Z, a-z, 0-9, _.
  *
- * Random GUID bytes effectively never satisfy this — the first uint32
+ * Random GUID bytes effectively never satisfy this: the first uint32
  * of a Guid is ~uniform over [0..2^32), and even when it lands in a
  * "plausible length" range the printable-ASCII + NUL-terminator check
  * eliminates the false positives.
+ *
+ * Caveat: we only match ANSI property names (SaveNum > 0). Every Soulmask
+ * property name observed in world.db is ASCII, so a negative-SaveNum
+ * (UTF-16) tag is currently treated as "not a tag" and the caller falls
+ * through to the alternate read path. If a future Soulmask version emits
+ * UTF-16 property names inside a Map<Struct,Struct> value, this needs an
+ * additional branch matching saveNum < 0 with the equivalent UTF-16
+ * identifier-character + NUL-terminator check.
  */
 function peekLooksLikePropertyTag(cursor) {
   if (cursor.remaining() < 8) return false;
@@ -836,6 +844,49 @@ function peekLooksLikePropertyTag(cursor) {
 // kind+path, kind+path+classPath, or full kind+path+classPath+embedded).
 // Other inner types have fixed sizes determined by the type itself, so
 // they ignore the hint.
+//
+// =====================================================================
+// Heuristics preamble: how this reader disambiguates ObjectProperty
+// elements that don't carry a per-element delimiter on the wire.
+//
+// Stock UE ArrayProperty<ObjectProperty> writes a sequence of object
+// values back-to-back with no length tag and no separator between
+// elements. Each element's wire form is one of:
+//
+//   (A) kind-only         1 byte
+//   (B) kind+path         1 byte + FString
+//   (C) kind+path+class   1 byte + FString + FString
+//   (D) kind+path+class+embedded property stream  (terminated by None)
+//
+// Without per-element bounds we'd read past the element's actual end
+// into either the next element's kind byte or a trailing binary section
+// (origin / placement data) and cascade-fail.
+//
+// We address this with four guards, each cheap and orthogonal:
+//
+//   Guard 1: budget exhaustion. After path, if there's no room for even
+//            a null-form classPath FString (4 bytes), stop here.
+//   Guard 2: implausible saveNum magnitude. A real classPath is short
+//            (<= 1024 chars); a peek that decodes to a huge magnitude
+//            usually means we're looking at the start of the next
+//            element's bytes instead.
+//   Guard 3: classPath starts with '/'. Soulmask asset paths are always
+//            "/Script/..." or "/Game/...". A peek whose first content
+//            byte isn't '/' (or '/' '\0' for UTF-16) is the next
+//            element's payload, not a real classPath.
+//   Guard 4: embedded-stream signature. The bytes following classPath
+//            either start a PropertyTag (identifier-character name with
+//            a small ANSI SaveNum) or they don't; if they don't, the
+//            element ends without an embedded stream.
+//
+// The same logic governs whether a 4-byte trailer at the element's tail
+// is consumed: only when the next 4 bytes are 0x00000000 (FName.Number)
+// AND we're still within budget.
+//
+// In practice this catches every known Soulmask actor in the tested
+// world.db. Adding a new game-specific element shape means adding a
+// new guard, not relaxing the existing ones.
+// =====================================================================
 function readArrayElement(cursor, innerType, sizeHint = Infinity) {
   switch (innerType) {
     case 'IntProperty':    return cursor.readInt32();
@@ -864,7 +915,7 @@ function readArrayElement(cursor, innerType, sizeHint = Infinity) {
     case 'WSObjectProperty': {
       // Bounded read, mirroring readObjectValue. The variable wire shapes
       // (kind-only, +path, +path+classPath, +embedded) are disambiguated by
-      // sizeHint — without the bound we'd read past the element into the
+      // sizeHint. Without the bound we'd read past the element into the
       // next property's tag, which causes catastrophic cascade failures
       // (cf. ChengHaoList in serial 92 and friends). Capture per-FString
       // isNull flags for byte-identical round-trip of empty wire-FStrings.
@@ -878,7 +929,7 @@ function readArrayElement(cursor, innerType, sizeHint = Infinity) {
       // kind byte with no path, classPath, or embedded stream. Without this
       // early-out, the FString reader would interpret the next 4 bytes (which
       // belong to either the next element or the trailing binary section)
-      // as a path saveNum — typically a huge garbage value that overshoots
+      // as a path saveNum: typically a huge garbage value that overshoots
       // the array. Seen in JianZhuInstYuanXings, ZhuangBeiLanDaoJuJiYiList,
       // and KuaiJieLanDaoJuJiYiList trailing slots.
       if (kind === 0) {
@@ -915,7 +966,7 @@ function readArrayElement(cursor, innerType, sizeHint = Infinity) {
         // "/Script/Module.Class" or "/Game/...". The first content character
         // is therefore "/" (0x2F). When the bytes after path are actually the
         // start of the NEXT element (kind byte + optional kindOnePrefix +
-        // path saveNum), peekSN can fall in the [-1024, 1024] range — e.g.
+        // path saveNum), peekSN can fall in the [-1024, 1024] range, e.g.
         // bytes `01 01 00 00` from a kind=1 element with kindOnePrefix=1 read
         // as int32 = 257. The previous saveNum-magnitude guard misses this;
         // checking the first content byte for '/' catches it cleanly. Allow
@@ -947,7 +998,7 @@ function readArrayElement(cursor, innerType, sizeHint = Infinity) {
         });
       }
       // Guard 4: embedded-stream presence. Same problem as the classPath
-      // guards but one level deeper — when the element has classPath but
+      // guards but one level deeper: when the element has classPath but
       // NO embedded stream, the bytes that follow classPath are the start
       // of the NEXT element (kind byte) or the trailing binary section
       // (12 zero bytes of origin). An embedded stream begins with a
@@ -1103,7 +1154,7 @@ export function writePropertyStream(writer, properties, emitTerminatorTrailer = 
 // StructValue.write) to avoid needing a writePropertyStream re-export.
 // `emitTerminatorTrailer` defaults to false because nested streams in
 // stock UE 4.27 don't carry the 4-byte FName.Number trailer that the
-// outermost stream does — but some Soulmask embedded ObjectProperty
+// outermost stream does. But some Soulmask embedded ObjectProperty
 // streams DO (see ObjectRef.hasTerminatorTrailer / readObjectValue's
 // trailer-skip detection), so callers can opt in.
 export function writeNestedPropertyStream(writer, properties, emitTerminatorTrailer = false) {

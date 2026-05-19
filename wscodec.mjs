@@ -1,9 +1,9 @@
 /**
- * wscodec — pure-JS codec for Soulmask actor_data property streams.
+ * wscodec: pure-JS codec for Soulmask actor_data property streams.
  *
  * The library accepts uncompressed bytes (the payload that comes out of
  * Soulmask's outer LZ4 wrapper) and returns a JavaScript object tree, and
- * vice versa. It has zero runtime dependencies — LZ4 handling, SQLite
+ * vice versa. It has zero runtime dependencies; LZ4 handling, SQLite
  * access, etc. are the caller's responsibility.
  *
  * Wire layout (the bytes accepted by `UnrealBlob.decode` and produced by
@@ -18,14 +18,14 @@
  * The SQLite `actor_table.data_version` column stores the NEGATIVE of the
  * wire-format DataVersion. A healthy blob with DataVersion=2 lives in a row
  * whose `data_version` column reads -2. The wire bytes themselves are
- * always the unsigned 0x00000002 — the negation is purely a column-side
+ * always the unsigned 0x00000002; the negation is purely a column-side
  * convention.
  *
  * Round-trip safety: when `_dirty` is false, `serialize` returns the
  * original input bytes verbatim. When `_dirty` is true, it re-emits the
  * property stream from scratch via `writePropertyStream`. Both paths are
  * verified byte-identical against every row in a tested world.db
- * (174.6 MB, 11,667 rows; `npm test`).
+ * (`npm test`).
  *
  * Re-exports the most commonly used types so callers can do
  *   import { UnrealBlob, FName, FGuid, ObjectRef, ... } from 'wscodec';
@@ -38,7 +38,7 @@ import { readPropertyStream, writePropertyStream } from './properties.mjs';
 // Convenience re-exports for the public API surface.
 export { Cursor, Writer } from './io.mjs';
 export { FName, FGuid } from './primitives.mjs';
-export { StructValue, STRUCT_HANDLERS } from './structs.mjs';
+export { StructValue, STRUCT_HANDLERS, registerStructHandler } from './structs.mjs';
 export { ObjectRef, SoftObjectRef, FTextValue, OpaqueValue } from './values.mjs';
 export {
   PropertyTag, Property,
@@ -69,15 +69,47 @@ export class UnrealBlob {
     this._dirty = false;
   }
 
-  get kind()      { return NAME; }
+  /**
+   * Codec-adapter name (`'unreal-properties'`). Surfaced for registries that
+   * dispatch on a codec's `kind` field; matches the `name` on the bare
+   * `codec` adapter exported at the bottom of this module.
+   */
+  get kind() { return NAME; }
+
+  /**
+   * Number of bytes the blob was decoded from (`_raw.length`), or 0 if the
+   * blob was constructed without an input buffer. NOT the post-serialize
+   * size; for that, call `serialize().length`.
+   */
   get totalSize() { return this._raw ? this._raw.length : 0; }
 
-  /** First top-level property with the given name, or null. */
+  /**
+   * First TOP-LEVEL property with the given tag name, or null. Does NOT
+   * traverse into embedded streams, struct values, array elements, or map
+   * entries. Use `findPropertyDeep` to walk the full tree.
+   */
   findProperty(propName) {
     for (const p of this.properties) {
       if (p.tag && p.tag.name && p.tag.name.value === propName) return p;
     }
     return null;
+  }
+
+  /**
+   * First property with the given tag name found anywhere in the property
+   * tree, or null. Performs a depth-first traversal across:
+   *
+   *   - top-level properties
+   *   - ObjectRef.embedded streams (nested ObjectProperty values)
+   *   - StructValue.value when it's a tagged property array
+   *   - ArrayProperty / SetProperty struct elements
+   *   - MapProperty entries: both key (if StructValue) and value
+   *
+   * Returns the first match in traversal order; later matches are not
+   * surfaced. For all matches, walk the tree manually.
+   */
+  findPropertyDeep(propName) {
+    return _findPropertyDeep(this.properties, propName);
   }
 
   static detect(u8) {
@@ -90,7 +122,7 @@ export class UnrealBlob {
    * Parse uncompressed property-stream bytes into an UnrealBlob.
    *
    * On unrecoverable structural failure the returned blob has `error` set
-   * and `properties` empty — callers that need a hard failure should check
+   * and `properties` empty. Callers that need a hard failure should check
    * `blob.error` after decode.
    */
   static decode(u8) {
@@ -125,13 +157,26 @@ export class UnrealBlob {
   /**
    * Return the uncompressed property-stream bytes for this blob.
    *
-   * Pass-through when `_dirty` is false: returns the input bytes verbatim.
-   * Re-encodes from `properties` when `_dirty` is true. `bodyTrailing`, if
-   * present, is appended after the None terminator + 4-byte FName.Number
+   * Pass-through when `_dirty` is false: returns the input bytes verbatim,
+   * even if `error` is set (the original bytes round-trip even when decode
+   * was incomplete). Re-encodes from `properties` when `_dirty` is true,
+   * appending `bodyTrailing` after the None terminator + 4-byte FName.Number
    * trailer that `writePropertyStream` emits.
+   *
+   * Throws if `_dirty` is true AND `error` is set: re-emitting would produce
+   * a malformed stream (the property tree is empty after a structural
+   * failure). Clear `.error` first if you intentionally want to emit from
+   * an externally-constructed properties array.
    */
   serialize() {
     if (!this._dirty && this._raw instanceof Uint8Array) return this._raw;
+
+    if (this.error != null) {
+      throw new Error(
+        `UnrealBlob.serialize: cannot re-emit a blob with decode error (${this.error}). ` +
+        `Leave _dirty=false to pass through _raw verbatim, or clear .error if you've replaced .properties manually.`
+      );
+    }
 
     const w = new Writer(this._raw?.length || 256);
     w.writeUint32(this.versionTag);
@@ -141,6 +186,59 @@ export class UnrealBlob {
     }
     return w.finalize();
   }
+}
+
+// Deep-search helper. Walks the property tree in depth-first order and
+// returns the first Property whose tag.name matches. Kept out of the class
+// body so the recursion can reach into nested shapes uniformly without
+// having to thread `this` around.
+function _findPropertyDeep(properties, propName) {
+  if (!Array.isArray(properties)) return null;
+  for (const p of properties) {
+    if (p.tag && p.tag.name && p.tag.name.value === propName) return p;
+    const v = p.value;
+    if (v == null) continue;
+    // ObjectRef with embedded property stream.
+    if (v.embedded) {
+      const hit = _findPropertyDeep(v.embedded, propName);
+      if (hit) return hit;
+    }
+    // StructValue: .value is either a property array (unknown struct) or a
+    // plain binary record (known struct). Only the array form is searchable.
+    if (v._structName && Array.isArray(v.value)) {
+      const hit = _findPropertyDeep(v.value, propName);
+      if (hit) return hit;
+    }
+    // ArrayProperty / SetProperty struct elements + ObjectRef embeddeds.
+    if (Array.isArray(v.elements)) {
+      for (const e of v.elements) {
+        if (e && e._structName && Array.isArray(e.value)) {
+          const hit = _findPropertyDeep(e.value, propName);
+          if (hit) return hit;
+        }
+        if (e && e.embedded) {
+          const hit = _findPropertyDeep(e.embedded, propName);
+          if (hit) return hit;
+        }
+      }
+    }
+    // MapProperty entries: both key (if StructValue) and value can hold a
+    // nested property stream.
+    if (Array.isArray(v.entries)) {
+      for (const ent of v.entries) {
+        if (ent.key && ent.key._structName && Array.isArray(ent.key.value)) {
+          const hit = _findPropertyDeep(ent.key.value, propName);
+          if (hit) return hit;
+        }
+        const ev = ent.value;
+        if (ev && ev._structName && Array.isArray(ev.value)) {
+          const hit = _findPropertyDeep(ev.value, propName);
+          if (hit) return hit;
+        }
+      }
+    }
+  }
+  return null;
 }
 
 // Generic codec-adapter shape (name + detect + decode + encode), suitable

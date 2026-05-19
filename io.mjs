@@ -1,5 +1,5 @@
 /**
- * Cursor + Writer — byte-level read/write primitives over a Uint8Array.
+ * Cursor + Writer: byte-level read/write primitives over a Uint8Array.
  *
  * No Unreal semantics here. FString lives here too because it's a stateful
  * read/write on the same DataView; everything else (FName, FGuid, structs,
@@ -15,8 +15,33 @@ export class Cursor {
   pos()       { return this.offset; }
   eof()       { return this.offset >= this.bytes.length; }
   remaining() { return this.bytes.length - this.offset; }
-  skip(n)     { this.offset += n; }
-  seek(n)     { this.offset = n; }
+
+  /**
+   * Advance the cursor by `n` bytes. Throws RangeError if `n` is negative or
+   * would take the cursor past the end of the buffer. Use `seek(n)` to jump
+   * to an absolute offset (including backwards).
+   */
+  skip(n) {
+    if (!Number.isFinite(n) || n < 0) {
+      throw new RangeError(`Cursor.skip: n must be a non-negative finite number, got ${n}`);
+    }
+    if (this.offset + n > this.bytes.length) {
+      throw new RangeError(`Cursor.skip: ${n} bytes from offset ${this.offset} exceeds buffer length ${this.bytes.length}`);
+    }
+    this.offset += n;
+  }
+
+  /**
+   * Move the cursor to absolute offset `n`. Throws RangeError if `n` is out
+   * of `[0, buffer.length]` (note: length is allowed; the cursor is then at
+   * EOF and any further read would throw).
+   */
+  seek(n) {
+    if (!Number.isFinite(n) || n < 0 || n > this.bytes.length) {
+      throw new RangeError(`Cursor.seek: offset ${n} out of range [0, ${this.bytes.length}]`);
+    }
+    this.offset = n;
+  }
 
   readUint8()   { const v = this.dv.getUint8(this.offset);            this.offset += 1; return v; }
   readInt8()    { const v = this.dv.getInt8(this.offset);             this.offset += 1; return v; }
@@ -28,6 +53,14 @@ export class Cursor {
   readInt64()   { const v = this.dv.getBigInt64(this.offset, true);   this.offset += 8; return v; }
   readFloat32() { const v = this.dv.getFloat32(this.offset, true);    this.offset += 4; return v; }
   readFloat64() { const v = this.dv.getFloat64(this.offset, true);    this.offset += 8; return v; }
+
+  /**
+   * Read `n` bytes and return them as a Uint8Array VIEW over the underlying
+   * buffer (no copy). The returned subarray shares storage with this cursor's
+   * buffer: mutating it mutates the buffer, and the view becomes stale if
+   * the buffer is detached. Callers that need to retain the bytes past the
+   * buffer's lifetime should `.slice()` the result.
+   */
   readBytes(n)  { const out = this.bytes.subarray(this.offset, this.offset + n); this.offset += n; return out; }
 
   /**
@@ -94,8 +127,18 @@ export class Writer {
   writeInt16(v)   { this._ensure(2); this.dv.setInt16(this.offset, v, true);        this.offset += 2; }
   writeUint32(v)  { this._ensure(4); this.dv.setUint32(this.offset, v >>> 0, true); this.offset += 4; }
   writeInt32(v)   { this._ensure(4); this.dv.setInt32(this.offset, v | 0, true);    this.offset += 4; }
-  writeUint64(v)  { this._ensure(8); this.dv.setBigUint64(this.offset, BigInt(v), true); this.offset += 8; }
-  writeInt64(v)   { this._ensure(8); this.dv.setBigInt64(this.offset, BigInt(v), true);  this.offset += 8; }
+
+  /**
+   * Write a 64-bit unsigned integer. Accepts BigInt, a decimal string, or a
+   * safe-integer Number (|v| <= Number.MAX_SAFE_INTEGER = 2^53 - 1). A Number
+   * outside that range throws RangeError rather than silently losing precision
+   * via `BigInt(largeNumber)`. The codec's decoders return I64/U64 values as
+   * strings for this reason; this guard catches accidental mutation that
+   * substitutes an unsafe Number.
+   */
+  writeUint64(v)  { this._ensure(8); this.dv.setBigUint64(this.offset, _toBigInt64(v, 'Writer.writeUint64'), true); this.offset += 8; }
+  /** Signed 64-bit integer. See writeUint64 for accepted value forms. */
+  writeInt64(v)   { this._ensure(8); this.dv.setBigInt64(this.offset, _toBigInt64(v, 'Writer.writeInt64'), true); this.offset += 8; }
   writeFloat32(v) { this._ensure(4); this.dv.setFloat32(this.offset, v, true);      this.offset += 4; }
   writeFloat64(v) { this._ensure(8); this.dv.setFloat64(this.offset, v, true);      this.offset += 8; }
   writeBytes(u8)  { this._ensure(u8.length); this.bytes.set(u8, this.offset);       this.offset += u8.length; }
@@ -147,4 +190,24 @@ export class Writer {
       this.offset += len;
     }
   }
+}
+
+/**
+ * Coerce a 64-bit integer value into a BigInt suitable for
+ * DataView.setBig{Int,Uint}64. Accepts BigInt directly; converts string and
+ * safe-integer Number; throws on unsafe Number or unsupported types.
+ *
+ * The motivation: `BigInt(largeNumber)` silently loses precision for
+ * |v| > 2^53. The decoder paths return I64/U64 values as decimal strings
+ * specifically to avoid this; tightening the writer's contract catches
+ * accidental round-trip-breaking mutation at the source.
+ */
+function _toBigInt64(v, fnName) {
+  if (typeof v === 'bigint') return v;
+  if (typeof v === 'string')  return BigInt(v);
+  if (typeof v === 'number') {
+    if (Number.isInteger(v) && Math.abs(v) <= Number.MAX_SAFE_INTEGER) return BigInt(v);
+    throw new RangeError(`${fnName}: Number ${v} is unsafe for 64-bit conversion (non-integer or |v| > 2^53). Pass a BigInt or decimal string.`);
+  }
+  throw new TypeError(`${fnName}: expected BigInt, string, or safe-integer Number; got ${typeof v}`);
 }

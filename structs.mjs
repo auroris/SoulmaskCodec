@@ -3,16 +3,20 @@
  *
  * Soulmask is UE 4.27 so "core" structs (Vector etc.) use 32-bit floats.
  * Known struct names read directly as binary; unknown struct names fall
- * through to a nested property stream (handled in properties.mjs, not here
- * — StructValue.read is supplied a `streamReader` callback to avoid a
+ * through to a nested property stream (handled in properties.mjs, not here;
+ * StructValue.read is supplied a `streamReader` callback to avoid a
  * load-order cycle).
  */
 
 import { FGuid } from './primitives.mjs';
 
-// Binary struct handlers. Each entry has read(cursor) → plain object and
+// Binary struct handlers. Each entry has read(cursor) -> plain object and
 // write(writer, plainObject). The plain object is what callers see as
 // `structValue.value` when the struct is one of these known shapes.
+//
+// Consumers can extend this registry to teach the codec about additional
+// known-binary structs; prefer the `registerStructHandler` helper below over
+// mutating this object directly, since it validates the handler shape.
 export const STRUCT_HANDLERS = {
   Vector:      { read: c => ({ x: c.readFloat32(), y: c.readFloat32(), z: c.readFloat32() }),
                  write: (w, v) => { w.writeFloat32(v.x); w.writeFloat32(v.y); w.writeFloat32(v.z); } },
@@ -24,12 +28,20 @@ export const STRUCT_HANDLERS = {
                  write: (w, v) => { w.writeFloat32(v.pitch); w.writeFloat32(v.yaw); w.writeFloat32(v.roll); } },
   Quat:        { read: c => ({ x: c.readFloat32(), y: c.readFloat32(), z: c.readFloat32(), w: c.readFloat32() }),
                  write: (w, v) => { w.writeFloat32(v.x); w.writeFloat32(v.y); w.writeFloat32(v.z); w.writeFloat32(v.w); } },
+  // FColor wire order is B, G, R, A (not R, G, B, A). This matches UE4's
+  // FColor::Serialize, where the in-memory union exposes the bytes in BGRA
+  // order to match Windows DIB / DirectX texture layout. Don't "fix" the
+  // ordering; it's correct as-is.
   Color:       { read: c => ({ b: c.readUint8(), g: c.readUint8(), r: c.readUint8(), a: c.readUint8() }),
                  write: (w, v) => { w.writeUint8(v.b); w.writeUint8(v.g); w.writeUint8(v.r); w.writeUint8(v.a); } },
   LinearColor: { read: c => ({ r: c.readFloat32(), g: c.readFloat32(), b: c.readFloat32(), a: c.readFloat32() }),
                  write: (w, v) => { w.writeFloat32(v.r); w.writeFloat32(v.g); w.writeFloat32(v.b); w.writeFloat32(v.a); } },
-  Guid:        { read: c => FGuid.read(c).value,
-                 write: (w, v) => new FGuid(v).write(w) },
+  // Guid returns an FGuid INSTANCE (not a bare string). FGuid carries
+  // toJSON/equals/isZero helpers; the write path accepts FGuid or a bare
+  // 8-4-4-4-12 string for backward compatibility with code that built the
+  // struct value from a literal.
+  Guid:        { read: c => FGuid.read(c),
+                 write: (w, v) => FGuid.from(v).write(w) },
   DateTime:    { read: c => c.readInt64().toString(),
                  write: (w, v) => w.writeInt64(v) },
   Timespan:    { read: c => c.readInt64().toString(),
@@ -47,6 +59,27 @@ export const STRUCT_HANDLERS = {
   Transform:   { read: c => ({ rotation: STRUCT_HANDLERS.Quat.read(c), translation: STRUCT_HANDLERS.Vector.read(c), scale3D: STRUCT_HANDLERS.Vector.read(c) }),
                  write: (w, v) => { STRUCT_HANDLERS.Quat.write(w, v.rotation); STRUCT_HANDLERS.Vector.write(w, v.translation); STRUCT_HANDLERS.Vector.write(w, v.scale3D); } },
 };
+
+/**
+ * Register (or replace) a struct handler. Callers can use this to teach the
+ * codec about additional binary structs the game emits that aren't in the
+ * stock registry. Without a handler, an unknown struct name falls through to
+ * the nested-property-stream path; that's still correct when the struct is
+ * actually tagged, and is byte-identical on round-trip via OpaqueValue when
+ * it isn't.
+ *
+ * Validates that `handler` has both `read(cursor)` and `write(writer, value)`
+ * functions and that `name` is a non-empty string.
+ */
+export function registerStructHandler(name, handler) {
+  if (typeof name !== 'string' || name.length === 0) {
+    throw new TypeError('registerStructHandler: name must be a non-empty string');
+  }
+  if (!handler || typeof handler.read !== 'function' || typeof handler.write !== 'function') {
+    throw new TypeError('registerStructHandler: handler must expose read(cursor) and write(writer, value) functions');
+  }
+  STRUCT_HANDLERS[name] = handler;
+}
 
 export class StructValue {
   constructor(structName, { value = null, terminated = false, decodeError = null, opaqueTail = null } = {}) {
@@ -70,7 +103,7 @@ export class StructValue {
    * PropertyTag (FString name with identifier-character ASCII content).
    * When supplied and the wire bytes look tagged, the read switches to
    * the property-stream path even for structs that have a known binary
-   * handler — Soulmask encodes known-binary structs (Transform, Box, ...)
+   * handler: Soulmask encodes known-binary structs (Transform, Box, ...)
    * as TAGGED property streams inside Map struct values, which would
    * otherwise be misread as raw 40-byte Transforms / etc. The decision
    * is recorded on the returned StructValue via `Array.isArray(value)`,

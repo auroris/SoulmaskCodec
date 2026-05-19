@@ -6,7 +6,7 @@
  *   2. Re-encode the inner version tag + property stream into a fresh buffer.
  *   3. Compare the re-encoded bytes to the original decompressed bytes.
  *
- * The LZ4 layer is intentionally skipped — LZ4 has many valid encodings for
+ * The LZ4 layer is intentionally skipped: LZ4 has many valid encodings for
  * the same payload, so the outer compressed bytes aren't byte-stable. The
  * decompressed property stream IS the canonical form, so that's what we
  * compare against.
@@ -18,15 +18,15 @@
  *   decodeError          Decode threw or recorded an error.
  *   unterminated         Decode OK but property stream didn't end on None.
  *                        Encoder always emits None, so round-trip can't be
- *                        byte-identical for these — skip.
+ *                        byte-identical for these; skip.
  *   bodyTrailing         Decode OK, terminated, but extra bytes after None
- *                        that the encoder won't reproduce — skip.
+ *                        that the encoder won't reproduce; skip.
  *   skippedMismatch      Some property in the tree carries _sizeMismatch.
- *                        writePropertyStream refuses to re-emit those —
+ *                        writePropertyStream refuses to re-emit those;
  *                        skip and tally by property name.
  *   roundTripOK          Re-encoded bytes match the original decompressed
  *                        bytes exactly.
- *   roundTripFail        Anything else — the regression tripwire. The exit
+ *   roundTripFail        Anything else: the regression tripwire. The exit
  *                        code is non-zero iff this count is non-zero.
  *
  * Usage:
@@ -90,7 +90,7 @@ function visitProperties(properties, visit) {
     // ObjectRef with embedded property stream.
     if (v.embedded) visitProperties(v.embedded, visit);
     // StructValue: value is either a property array (unknown struct) or a
-    // plain binary record (known struct via STRUCT_HANDLERS) — skip the
+    // plain binary record (known struct via STRUCT_HANDLERS); skip the
     // latter, recurse the former.
     if (v._structName && Array.isArray(v.value)) visitProperties(v.value, visit);
     // ArrayProperty / SetProperty elements: when innerType is StructProperty
@@ -218,7 +218,7 @@ for (const row of rows) {
   }
   if (firstDiff >= 0) {
     stats.roundTripFail++;
-    // Context dump — 16 bytes either side of the first divergence so a
+    // Context dump: 16 bytes either side of the first divergence so a
     // failing run gives us something to bisect with.
     const ctxStart = Math.max(0, firstDiff - 16);
     const ctxEnd   = Math.min(re.length, firstDiff + 16);
@@ -241,7 +241,7 @@ const elapsedMs = Date.now() - startMs;
 if (failures.length > 0) {
   console.log(`=== Failures (${failures.length}) ===`);
   // Group by phase so a sea of "byte-mismatch" doesn't drown out a single
-  // "encode-throw" — both are real regressions, but they suggest different
+  // "encode-throw". Both are real regressions, but they suggest different
   // root causes.
   const byPhase = new Map();
   for (const f of failures) {

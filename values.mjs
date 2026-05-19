@@ -1,9 +1,9 @@
 /**
  * Wrapper classes for non-trivial property-value shapes:
- *   ObjectRef       — ObjectProperty / ClassProperty / Weak / Lazy
- *   SoftObjectRef   — SoftObjectProperty / SoftClassProperty
- *   FTextValue      — TextProperty (FText: localized / culture-invariant string)
- *   OpaqueValue     — bytes we don't decode (fallback for unknown/unimplemented)
+ *   ObjectRef       : ObjectProperty / ClassProperty / Weak / Lazy
+ *   SoftObjectRef   : SoftObjectProperty / SoftClassProperty
+ *   FTextValue      : TextProperty (FText: localized / culture-invariant string)
+ *   OpaqueValue     : bytes we don't decode (fallback for unknown/unimplemented)
  *
  * Array/Set/Map values live in properties.mjs because they're tightly
  * coupled to PropertyTag (struct arrays carry an inner tag).
@@ -16,7 +16,7 @@
 import { writeNestedPropertyStream } from './properties.mjs';
 
 /**
- * Soulmask ObjectProperty value layout. Each field is optional — the wire
+ * Soulmask ObjectProperty value layout. Each field is optional; the wire
  * shape is bounded by the property tag's size budget and the reader stops
  * at whichever boundary it hits first:
  *
@@ -25,7 +25,7 @@ import { writeNestedPropertyStream } from './properties.mjs';
  *                             4-byte field sitting between the kind byte
  *                             and pathFS. Observed value is always 1; the
  *                             semantic meaning is unclear (a flag, an
- *                             FName.Number, or a count) — we capture and
+ *                             FName.Number, or a count); we capture and
  *                             replay it verbatim for byte-identical
  *                             round-trip. Seen on hard actor references
  *                             like NPC `HBindBGCompActor` (the pawn's
@@ -67,7 +67,7 @@ export class ObjectRef {
     this.terminated = terminated;
     // When true, the embedded property stream was followed by a 4-byte
     // FName.Number trailer (the outermost-stream None-trailer convention,
-    // applied here by Soulmask to some nested ObjectProperty embeddeds —
+    // applied here by Soulmask to some nested ObjectProperty embeddeds,
     // e.g. JianZhuInstGLQComponent). The reader detects this when exactly
     // 4 trailing bytes remain inside the tag's size budget; the writer
     // replays them so round-trip stays byte-identical.
@@ -118,28 +118,28 @@ export class SoftObjectRef {
  * UE4 FText wire format:
  *   uint32  Flags
  *   int8    HistoryType
- *   — HistoryType -1 (None / culture-invariant):
+ *   HistoryType -1 (None / culture-invariant):
  *       int32   bHasCultureInvariantString
  *       [FString displayString]   (only when bHasCultureInvariantString != 0)
- *   — HistoryType 0 (Base / localized):
+ *   HistoryType 0 (Base / localized):
  *       FString Namespace
  *       FString Key
  *       FString SourceString
- *   — HistoryType 2 (OrderedFormat):
- *       FText   SourceFmt        — the format pattern, e.g. "{0} < {1} >"
+ *   HistoryType 2 (OrderedFormat):
+ *       FText   SourceFmt        (the format pattern, e.g. "{0} < {1} >")
  *       int32   NumArguments
  *       for each: int8 ContentType + value
  *         0=Int(int64)  1=UInt(uint64)  2=Float(f32)  3=Double(f64)
  *         4=Text(FText) 5=Gender(int8)
- *   — HistoryType 4 (AsNumber, FTextHistory_AsNumber):
+ *   HistoryType 4 (AsNumber, FTextHistory_AsNumber):
  *       FFormatArgumentValue SourceValue (int8 type + value-by-type)
  *       uint32 bHasFormatOptions  ← legacy UE3-style 4-byte bool, NOT 1-byte
  *       [FNumberFormattingOptions FormatOptions]
  *       uint32 bHasCulture        ← also a uint32 bool
  *       [FString TargetCulture]
  *       FNumberFormattingOptions = AlwaysSign(uint32) + UseGrouping(uint32) +
- *         RoundingMode(int8) + 4 × int32 digit-count fields.
- *   — All other types: remaining bytes stored in _raw for verbatim round-trip.
+ *         RoundingMode(int8) + 4 x int32 digit-count fields.
+ *   All other types: remaining bytes stored in _raw for verbatim round-trip.
  */
 export class FTextValue {
   constructor({
@@ -195,20 +195,21 @@ export class FTextValue {
 }
 
 /**
- * Holds raw bytes we couldn't (or wouldn't) decode. `reason` is for
- * debugging only; encoding writes the bytes back verbatim.
+ * Holds raw bytes we couldn't (or wouldn't) decode. `reason` is a free-form
+ * string for debugging only; encoding writes the bytes back verbatim, so a
+ * value the codec couldn't parse still round-trips byte-identical.
  *
- * Two access paths intentionally co-exist:
- *   - `.bytes` / `.reason` — the canonical getter API.
- *   - `._opaque` / `._opaqueReason` — backing-store fields, also publicly
- *     readable for consumers that pre-date the getter API.
+ * OpaqueValue is the codec's universal fallback for everything from unknown
+ * property types to mid-decode recoveries (Struct/Array/Set/Map/Text whose
+ * inner shape didn't parse cleanly). The reader's contract is: on any
+ * structural failure inside a finite byte budget, rewind to the value's
+ * start and capture the budget verbatim into an OpaqueValue, so the outer
+ * stream stays byte-aligned regardless of what went wrong inside.
  */
 export class OpaqueValue {
   constructor(bytes, reason = null) {
-    this._opaque = bytes;
-    if (reason) this._opaqueReason = reason;
+    this.bytes = bytes;
+    this.reason = reason;
   }
-  get bytes()  { return this._opaque; }
-  get reason() { return this._opaqueReason ?? null; }
-  write(writer) { writer.writeBytes(this._opaque); }
+  write(writer) { writer.writeBytes(this.bytes); }
 }
