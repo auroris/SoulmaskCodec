@@ -10,7 +10,8 @@
     "./primitives": "./primitives.mjs",
     "./structs": "./structs.mjs",
     "./values": "./values.mjs",
-    "./properties": "./properties.mjs"
+    "./properties": "./properties.mjs",
+    "./json": "./json.mjs"
   },
   "files": [
     "wscodec.mjs",
@@ -19,10 +20,15 @@
     "structs.mjs",
     "values.mjs",
     "properties.mjs",
+    "json.mjs",
     "README.md"
   ],
   "scripts": {
-    "test": "node test/test-roundtrip.mjs"
+    "test": "node test/test-roundtrip.mjs",
+    "test:json": "node test/test-json-full.mjs",
+    "test:json-spot": "node test/test-json-roundtrip.mjs",
+    "export-db": "node scripts/db-to-json.mjs",
+    "import-db": "node scripts/json-to-db.mjs"
   },
   "keywords": [
     "soulmask",

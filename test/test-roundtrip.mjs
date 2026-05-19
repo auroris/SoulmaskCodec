@@ -23,7 +23,9 @@
  *                        that the encoder won't reproduce; skip.
  *   skippedMismatch      Some property in the tree carries _sizeMismatch.
  *                        writePropertyStream refuses to re-emit those;
- *                        skip and tally by property name.
+ *                        skip and tally by (name|type|subtype) with delta
+ *                        distribution and parsed-value shape, so the report
+ *                        points at the specific decoder branch to fix.
  *   roundTripOK          Re-encoded bytes match the original decompressed
  *                        bytes exactly.
  *   roundTripFail        Anything else: the regression tripwire. The exit
@@ -122,8 +124,44 @@ const stats = {
   roundTripOK: 0,
   roundTripFail: 0,
 };
-const skipsByProperty = new Map();   // property name → row-occurrence count (per-row, not per-mismatch)
+// Mismatch aggregation: key = `name|type|subtype` → diagnostic record. Subtype
+// is the type-specific qualifier from the tag (structName, innerType,
+// valueType, enumName) so a property that's an Array<Int> vs Array<Struct>
+// gets tallied separately even when the property name is the same.
+const mismatchAgg = new Map();
 const failures = [];
+
+// Compact descriptor for what `readValue` parsed the value AS, used in the
+// _sizeMismatch report. The goal is to pin down which codec branch produced
+// the wrong-size value: an OpaqueValue means the codec gave up and captured
+// raw bytes (but somehow still tallied wrong); a StructValue<X> means the
+// X struct handler / nested stream returned the wrong byte count; etc.
+function describeValueShape(v) {
+  if (v == null) return 'null';
+  const t = typeof v;
+  if (t !== 'object') return t;
+  if (v instanceof Uint8Array) return `Uint8Array[${v.length}]`;
+  if (Array.isArray(v)) return `Array[${v.length}]`;
+  const cn = v.constructor?.name || 'object';
+  if (cn === 'StructValue') {
+    const inner = Array.isArray(v.value) ? `propStream[${v.value.length}]` : typeof v.value;
+    return `StructValue<${v._structName}>(${inner})${v._structDecodeError ? '!err' : ''}`;
+  }
+  if (cn === 'ArrayValue') return `ArrayValue[${v.elements?.length ?? 0}]`;
+  if (cn === 'SetValue')   return `SetValue[${v.elements?.length ?? 0}]`;
+  if (cn === 'MapValue')   return `MapValue[${v.entries?.length ?? 0}]`;
+  if (cn === 'OpaqueValue') return `OpaqueValue[${v.bytes?.length ?? 0}] (${v.reason ?? ''})`;
+  if (cn === 'ObjectRef') {
+    const parts = [];
+    if (v.path != null) parts.push('path');
+    if (v.classPath != null) parts.push('class');
+    if (Array.isArray(v.embedded)) parts.push(`embedded[${v.embedded.length}]`);
+    return `ObjectRef(${parts.join(',') || 'kindOnly'})`;
+  }
+  if (cn === 'SoftObjectRef') return 'SoftObjectRef';
+  if (cn === 'FTextValue')    return `FTextValue(historyType=${v.historyType})`;
+  return cn;
+}
 
 const startMs = Date.now();
 let totalBytes = 0;
@@ -174,16 +212,52 @@ for (const row of rows) {
     continue;
   }
 
-  // Tally any _sizeMismatch found anywhere in this row. One row contributes
-  // at most once to each property name (Set), so the counts are comparable
-  // across runs (changing tree shape doesn't double-count).
-  const mismatchedNames = new Set();
+  // Tally every _sizeMismatch found anywhere in this row. One row contributes
+  // at most once per (name|type|subtype) group, so counts stay comparable
+  // across runs. For each group we record: row count, distribution of
+  // (expected,actual) pairs, the JS shape `readValue` produced, and a few
+  // example row serials. That's enough to point at the broken decoder branch:
+  //   - subtype tells you which codec path (StructProperty<Foo> vs
+  //     ArrayProperty<ObjectProperty>, etc.)
+  //   - delta = actual-expected: negative = under-read (decoder skipped bytes);
+  //     positive = over-read (decoder consumed bytes that belonged to the next
+  //     property). A consistent delta across many rows usually means a single
+  //     missing/extra field.
+  //   - parsedAs tells you whether the codec gave up (OpaqueValue) or returned
+  //     a typed value that turned out to disagree with the tag's Size.
+  const seenKeys = new Set();
   visitProperties(blob.properties, (p) => {
-    if (p._sizeMismatch && p.name) mismatchedNames.add(p.name);
+    if (!p._sizeMismatch || !p.name) return;
+    const t = p.tag;
+    const ptype = t.type?.value ?? '?';
+    let subtype = null;
+    switch (ptype) {
+      case 'StructProperty': subtype = t.structName?.value || null; break;
+      case 'ArrayProperty':
+      case 'SetProperty':    subtype = t.innerType?.value || null; break;
+      case 'MapProperty':    subtype = `${t.innerType?.value ?? '?'}->${t.valueType?.value ?? '?'}`; break;
+      case 'ByteProperty':
+      case 'EnumProperty':   subtype = t.enumName?.value || null; break;
+    }
+    const key = subtype ? `${p.name}|${ptype}|${subtype}` : `${p.name}|${ptype}`;
+    if (seenKeys.has(key)) return;
+    seenKeys.add(key);
+
+    let agg = mismatchAgg.get(key);
+    if (!agg) {
+      agg = { name: p.name, type: ptype, subtype, rows: 0, deltas: new Map(), examples: [] };
+      mismatchAgg.set(key, agg);
+    }
+    agg.rows++;
+    const exp = p._sizeMismatch.expected, act = p._sizeMismatch.actual;
+    const dkey = `${exp}|${act}`;
+    agg.deltas.set(dkey, (agg.deltas.get(dkey) || 0) + 1);
+    if (agg.examples.length < 3) {
+      agg.examples.push({ serial: row.actor_serial, parsedAs: describeValueShape(p.value) });
+    }
   });
-  if (mismatchedNames.size > 0) {
+  if (seenKeys.size > 0) {
     stats.skippedMismatch++;
-    for (const n of mismatchedNames) skipsByProperty.set(n, (skipsByProperty.get(n) || 0) + 1);
     continue;
   }
 
@@ -262,12 +336,26 @@ if (failures.length > 0) {
   console.log('');
 }
 
-if (skipsByProperty.size > 0) {
-  console.log('=== Skipped due to _sizeMismatch (encoder refuses to re-emit) ===');
-  console.log('(Per-row counts: each row contributes at most once per property name.)');
-  const sorted = [...skipsByProperty.entries()].sort((a, b) => b[1] - a[1]);
-  for (const [name, count] of sorted) {
-    console.log(`  [${String(count).padStart(4)}x] ${name}`);
+if (mismatchAgg.size > 0) {
+  console.log('=== Properties with _sizeMismatch (decoder bug candidates) ===');
+  console.log('Per-row counts: each row contributes at most once per (name|type|subtype) group.');
+  console.log('Delta = actual - expected.  Negative = under-read; positive = over-read.');
+  console.log('');
+  const sorted = [...mismatchAgg.values()].sort((a, b) => b.rows - a.rows);
+  for (const info of sorted) {
+    const typeStr = info.subtype ? `${info.type}<${info.subtype}>` : info.type;
+    console.log(`  [${String(info.rows).padStart(5)}x] ${info.name}  :  ${typeStr}`);
+    const deltas = [...info.deltas.entries()].sort((a, b) => b[1] - a[1]);
+    for (const [d, count] of deltas.slice(0, 4)) {
+      const [exp, act] = d.split('|').map(Number);
+      const delta = act - exp;
+      const sign = delta >= 0 ? '+' : '';
+      console.log(`         ${String(count).padStart(5)}x  expected=${exp} actual=${act}  (delta ${sign}${delta})`);
+    }
+    if (deltas.length > 4) console.log(`         ... and ${deltas.length - 4} more delta value(s)`);
+    for (const ex of info.examples) {
+      console.log(`         example: serial=${ex.serial}  parsedAs=${ex.parsedAs}`);
+    }
   }
   console.log('');
 }

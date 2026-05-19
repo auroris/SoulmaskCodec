@@ -46,6 +46,14 @@ export {
   readPropertyStream, writePropertyStream, writeNestedPropertyStream,
   readValue, writeValue,
 } from './properties.mjs';
+// JSON converter: declared at the bottom so UnrealBlob (below) is already
+// defined when json.mjs's deferred references resolve. ESM live bindings
+// keep this load-order safe even with the json.mjs ↔ wscodec.mjs cycle.
+export {
+  blobToJSON, jsonToBlob,
+  blobToJSONString, jsonStringToBlob,
+  jsonReplacer, jsonReviver,
+} from './json.mjs';
 
 const NAME = 'unreal-properties';
 const VERSION_HEADER_SIZE = 4;
