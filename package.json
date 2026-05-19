@@ -28,7 +28,8 @@
     "test:json": "node test/test-json-full.mjs",
     "test:json-spot": "node test/test-json-roundtrip.mjs",
     "export-db": "node scripts/db-to-json.mjs",
-    "import-db": "node scripts/json-to-db.mjs"
+    "import-db": "node --max-old-space-size=4096 scripts/json-to-db.mjs",
+    "dump-logs": "node scripts/dump-logs.mjs"
   },
   "keywords": [
     "soulmask",
