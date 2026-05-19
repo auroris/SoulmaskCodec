@@ -1,0 +1,1111 @@
+/**
+ * Property tag + property tree machinery.
+ *
+ * Layout (UE 4.27, PropertyTag.h, Soulmask tweaks):
+ *
+ *   FString  Name
+ *   [if Name == "None": consume int32 trailer if outermost, stream ends]
+ *   FString  Type
+ *   int32    Size                  // bytes of value data following the tag
+ *   int32    ArrayIndex
+ *   // type-specific tag data:
+ *   if Type == "StructProperty":  FString StructName + FGuid StructGuid
+ *   if Type == "BoolProperty":    u8 BoolVal
+ *   if Type == "ByteProperty":    FString EnumName
+ *   if Type == "EnumProperty":    FString EnumName
+ *   if Type == "ArrayProperty":   FString InnerType
+ *   if Type == "SetProperty":     FString InnerType
+ *   if Type == "MapProperty":     FString InnerType + FString ValueType
+ *   u8 HasPropertyGuid
+ *   if HasPropertyGuid:           FGuid PropertyGuid
+ *   // then: Size bytes of value data (format depends on Type)
+ *
+ * The OUTERMOST property stream's "None" terminator carries a 4-byte
+ * trailer (FName.Number = 0). Nested streams (struct, array-of-struct
+ * elements, embedded object data) do NOT.
+ */
+
+import { FName, FGuid }                                       from './primitives.mjs';
+import { StructValue, STRUCT_HANDLERS }                       from './structs.mjs';
+import { ObjectRef, SoftObjectRef, FTextValue, OpaqueValue }  from './values.mjs';
+
+// ==========================================================================
+// PropertyTag — the header preceding each property's value bytes.
+// ==========================================================================
+export class PropertyTag {
+  constructor(fields = {}) {
+    this.name = fields.name ?? null;
+    this.type = fields.type ?? null;
+    this.size = fields.size ?? 0;
+    this.arrayIndex = fields.arrayIndex ?? 0;
+    this.structName = fields.structName ?? null;
+    this.structGuid = fields.structGuid ?? null;
+    this.boolVal = fields.boolVal ?? null;
+    this.enumName = fields.enumName ?? null;
+    this.innerType = fields.innerType ?? null;
+    this.valueType = fields.valueType ?? null;
+    this.hasPropertyGuid = !!fields.hasPropertyGuid;
+    this.propertyGuid = fields.propertyGuid ?? null;
+    this.isTerminator = !!fields.isTerminator;
+  }
+
+  static read(cursor) {
+    const name = FName.read(cursor);
+    if (name.value === 'None') return new PropertyTag({ name, isTerminator: true });
+
+    const tag = new PropertyTag({
+      name,
+      type: FName.read(cursor),
+      size: cursor.readInt32(),
+      arrayIndex: cursor.readInt32(),
+    });
+
+    switch (tag.type.value) {
+      case 'StructProperty': tag.structName = FName.read(cursor); tag.structGuid = FGuid.read(cursor); break;
+      case 'BoolProperty':   tag.boolVal = cursor.readUint8(); break;
+      case 'ByteProperty':   tag.enumName = FName.read(cursor); break;
+      case 'EnumProperty':   tag.enumName = FName.read(cursor); break;
+      case 'ArrayProperty':  tag.innerType = FName.read(cursor); break;
+      case 'SetProperty':    tag.innerType = FName.read(cursor); break;
+      case 'MapProperty':    tag.innerType = FName.read(cursor); tag.valueType = FName.read(cursor); break;
+    }
+    tag.hasPropertyGuid = cursor.readUint8() !== 0;
+    if (tag.hasPropertyGuid) tag.propertyGuid = FGuid.read(cursor);
+    return tag;
+  }
+
+  write(writer) {
+    this.name.write(writer);
+    if (this.isTerminator) return;
+    this.type.write(writer);
+    writer.writeInt32(this.size);
+    writer.writeInt32(this.arrayIndex);
+    switch (this.type.value) {
+      case 'StructProperty': this.structName.write(writer); this.structGuid.write(writer); break;
+      case 'BoolProperty':   writer.writeUint8(this.boolVal); break;
+      case 'ByteProperty':   this.enumName.write(writer); break;
+      case 'EnumProperty':   this.enumName.write(writer); break;
+      case 'ArrayProperty':  this.innerType.write(writer); break;
+      case 'SetProperty':    this.innerType.write(writer); break;
+      case 'MapProperty':    this.innerType.write(writer); this.valueType.write(writer); break;
+    }
+    writer.writeUint8(this.hasPropertyGuid ? 1 : 0);
+    if (this.hasPropertyGuid) this.propertyGuid.write(writer);
+  }
+}
+
+// ==========================================================================
+// Container value classes
+// ==========================================================================
+export class ArrayValue {
+  constructor({ elements = [], innerTag = null, perElementTrailings = null } = {}) {
+    this.elements = elements;
+    this._arrayInnerTag = innerTag;
+    // Soulmask per-element placement-binary for ArrayProperty<ObjectProperty>
+    // in JianZhuInstYuanXings (building-zone yuan-xing arrays). Parallel to
+    // `elements`; entries may be null when an element has no trailing of its
+    // own. See readObjectArrayPerElementBlock / writeObjectArrayPerElementBlock.
+    this._perElementTrailings = perElementTrailings;
+  }
+}
+
+export class SetValue {
+  constructor({ removed = [], elements = [] } = {}) {
+    this.removed = removed;
+    this.elements = elements;
+  }
+}
+
+export class MapValue {
+  constructor({ removed = [], entries = [] } = {}) {
+    this.removed = removed;
+    this.entries = entries;
+  }
+}
+
+// ==========================================================================
+// Property — one tag + its decoded value.
+// ==========================================================================
+export class Property {
+  constructor(tag, value, { sizeMismatch = null } = {}) {
+    this.tag = tag;
+    this.value = value;
+    if (sizeMismatch) this._sizeMismatch = sizeMismatch;
+  }
+  get name() { return this.tag.name?.value ?? null; }
+  get type() { return this.tag.type?.value ?? null; }
+}
+
+// ==========================================================================
+// Value codec — dispatches on tag.type.value.
+//
+// sizeHint is the tag's Size field (bytes following the tag). Containers
+// (Array/Set/Map) and StructProperty use it as the byte budget for nested
+// decoding; on failure they fall back to OpaqueValue so the stream stays
+// consistent.
+// ==========================================================================
+export function readValue(cursor, tag, sizeHint) {
+  const t = tag.type.value;
+  switch (t) {
+    case 'IntProperty':    return cursor.readInt32();
+    case 'Int8Property':   return cursor.readInt8();
+    case 'Int16Property':  return cursor.readInt16();
+    case 'Int64Property':  return cursor.readInt64().toString();
+    case 'UInt16Property': return cursor.readUint16();
+    case 'UInt32Property': return cursor.readUint32();
+    case 'UInt64Property': return cursor.readUint64().toString();
+    case 'FloatProperty':  return cursor.readFloat32();
+    case 'DoubleProperty': return cursor.readFloat64();
+    case 'BoolProperty':   return tag.boolVal !== 0;
+    case 'StrProperty':    return cursor.readFString().value;
+    case 'NameProperty':   return FName.read(cursor);
+    case 'ObjectProperty':
+    case 'ClassProperty':
+    case 'WeakObjectProperty':
+    case 'LazyObjectProperty':
+    case 'WSObjectProperty':           // Soulmask-specific alias (per BLOB_FORMAT.md)
+      return readObjectValue(cursor, sizeHint);
+    case 'SoftObjectProperty':
+    case 'SoftClassProperty':
+      return new SoftObjectRef({ assetPath: cursor.readFString().value, subPath: cursor.readFString().value });
+    case 'ByteProperty':
+      return tag.enumName.value === 'None' ? cursor.readUint8() : FName.read(cursor);
+    case 'EnumProperty':
+      return FName.read(cursor);
+    case 'StructProperty':
+      return StructValue.read(cursor, tag.structName.value, sizeHint, readPropertyStream, peekLooksLikePropertyTag);
+    case 'ArrayProperty':
+    case 'SetProperty':
+    case 'MapProperty': {
+      const opaqueStart = cursor.pos();
+      try {
+        if (t === 'ArrayProperty') return readArrayValue(cursor, tag, sizeHint);
+        if (t === 'SetProperty')   return readSetValue(cursor, tag);
+        return readMapValue(cursor, tag);
+      } catch (e) {
+        cursor.seek(opaqueStart);
+        return new OpaqueValue(cursor.readBytes(sizeHint).slice(), `${t} decode failed: ${e.message}`);
+      }
+    }
+    case 'TextProperty':
+      return readFText(cursor, sizeHint);
+    case 'MulticastDelegateProperty':
+    case 'MulticastInlineDelegateProperty':
+    case 'MulticastSparseDelegateProperty':
+    case 'DelegateProperty':
+      // Wire format (per UE source):
+      //   [int32 NumDelegates]
+      //   For each: [UObject ref] [FName FunctionName]
+      // The UObject-ref encoding inside a delegate is archive-dependent and
+      // we don't have ground-truth Soulmask data to verify it. Preserve the
+      // bytes verbatim so round-trip via OpaqueValue stays byte-identical;
+      // a structured decoder can be slotted in later when we see real data.
+      return new OpaqueValue(cursor.readBytes(sizeHint).slice(), `${t} (recognized; structured decode not yet implemented)`);
+    default:
+      return new OpaqueValue(cursor.readBytes(sizeHint).slice(), `Unknown property type ${t}`);
+  }
+}
+
+export function writeValue(writer, tag, value) {
+  // Decode may have fallen back to OpaqueValue for any property type —
+  // Array/Set/Map/Struct/Text decode failures, unknown property types,
+  // overshoot recoveries, etc. Emit the captured bytes verbatim so the
+  // outer stream stays aligned regardless of which slot held the opaque.
+  // (TextProperty and the `default:` case used to do this individually;
+  // a single guard up here covers every slot uniformly.)
+  if (value instanceof OpaqueValue) { value.write(writer); return; }
+  const t = tag.type.value;
+  switch (t) {
+    case 'IntProperty':    writer.writeInt32(value);   return;
+    case 'Int8Property':   writer.writeInt8(value);    return;
+    case 'Int16Property':  writer.writeInt16(value);   return;
+    case 'Int64Property':  writer.writeInt64(value);   return;
+    case 'UInt16Property': writer.writeUint16(value);  return;
+    case 'UInt32Property': writer.writeUint32(value);  return;
+    case 'UInt64Property': writer.writeUint64(value);  return;
+    case 'FloatProperty':  writer.writeFloat32(value); return;
+    case 'DoubleProperty': writer.writeFloat64(value); return;
+    case 'BoolProperty':   return;                     // value lives in the tag
+    case 'StrProperty':    writer.writeFString(value); return;
+    case 'NameProperty':   FName.from(value).write(writer); return;
+    case 'ObjectProperty':
+    case 'ClassProperty':
+    case 'WeakObjectProperty':
+    case 'LazyObjectProperty':
+    case 'WSObjectProperty':
+      writeObjectValue(writer, value); return;
+    case 'SoftObjectProperty':
+    case 'SoftClassProperty':
+      if (value instanceof SoftObjectRef) value.write(writer);
+      else new SoftObjectRef(value).write(writer);
+      return;
+    case 'ByteProperty':
+      if (tag.enumName.value === 'None') writer.writeUint8(value);
+      else FName.from(value).write(writer);
+      return;
+    case 'EnumProperty':
+      FName.from(value).write(writer); return;
+    case 'StructProperty':
+      value.write(writer, writeNestedPropertyStream);
+      return;
+    case 'ArrayProperty': writeArrayValue(writer, tag, value); return;
+    case 'SetProperty':   writeSetValue(writer, tag, value);   return;
+    case 'MapProperty':   writeMapValue(writer, tag, value);   return;
+    case 'TextProperty':
+      if (value instanceof FTextValue) { writeFText(writer, value); return; }
+      throw new Error('writeValue: TextProperty: expected FTextValue or OpaqueValue');
+    default:
+      throw new Error(`writeValue: no encoder for type ${t}`);
+  }
+}
+
+// -------- TextProperty (FText) --------
+function readFText(cursor, sizeHint) {
+  const start = cursor.pos();
+  try {
+    const flags = cursor.readUint32();
+    const historyType = cursor.readInt8();
+    if (historyType === -1) {
+      // None / culture-invariant: optional display string
+      const bHas = cursor.readInt32();
+      let displayString = null, displayStringIsNull = false;
+      if (bHas) {
+        const fs = cursor.readFString();
+        displayString = fs.value;
+        displayStringIsNull = fs.isNull;
+      }
+      return new FTextValue({ flags, historyType: -1, displayString, displayStringIsNull });
+    }
+    if (historyType === 0) {
+      // Base / localized: namespace + key + source string. Empty strings on
+      // the wire may use either null-form (SaveNum=0) or empty-with-terminator
+      // (SaveNum=1) — capture `isNull` per-field so the writer reproduces the
+      // exact wire form.
+      const nsFS  = cursor.readFString();
+      const kFS   = cursor.readFString();
+      const ssFS  = cursor.readFString();
+      return new FTextValue({
+        flags, historyType: 0,
+        namespace:    nsFS.value, namespaceIsNull:    nsFS.isNull,
+        key:          kFS.value,  keyIsNull:          kFS.isNull,
+        sourceString: ssFS.value, sourceStringIsNull: ssFS.isNull,
+      });
+    }
+    if (historyType === 2) {
+      // ArgumentFormat: a format-pattern FText plus an ordered argument list.
+      // Each argument is a ContentType byte (EFormatArgumentType) followed by
+      // the value for that type:
+      //   0=Int(int64)  1=UInt(uint64)  2=Float(f32)  3=Double(f64)
+      //   4=Text(FText, recursive)  5=Gender(int8)
+      // No argument names on the wire — arguments are positional ({0}, {1} …).
+      const sourceFmt = readFText(cursor, Infinity);
+      const numArgs = cursor.readInt32();
+      const args = [];
+      for (let i = 0; i < numArgs; i++) {
+        const type = cursor.readInt8();
+        let value;
+        switch (type) {
+          case 0: value = cursor.readInt64().toString();  break;
+          case 1: value = cursor.readUint64().toString(); break;
+          case 2: value = cursor.readFloat32();           break;
+          case 3: value = cursor.readFloat64();           break;
+          case 4: value = readFText(cursor, Infinity);    break;
+          case 5: value = cursor.readInt8();              break;
+          default: throw new Error(`readFText: unknown ArgumentFormat ContentType ${type}`);
+        }
+        args.push({ type, value });
+      }
+      return new FTextValue({ flags, historyType: 2, sourceFmt, arguments: args });
+    }
+    if (historyType === 4) {
+      // AsNumber (FTextHistory_AsNumber):
+      //   FFormatArgumentValue  SourceValue
+      //   uint32                bHasFormatOptions     ← legacy UE3-style bool (4 bytes, not 1)
+      //   [FNumberFormattingOptions FormatOptions]
+      //   uint32                bHasCulture           ← same; uint32 not uint8
+      //   [FString              TargetCulture]
+      //
+      // Inside FNumberFormattingOptions, AlwaysSign and UseGrouping are also
+      // uint32 booleans. Only RoundingMode (int8) and the four digit-count
+      // fields (int32) follow the modern sizes. This matches the actual wire
+      // bytes — empirically MaxIntDigits = ~324 (close to DBL_MAX_10_EXP+1
+      // = 309) and MaxFracDigits = 3 (UE default) under this interpretation.
+      const argType = cursor.readInt8();
+      let argValue;
+      switch (argType) {
+        case 0: argValue = cursor.readInt64().toString();  break;
+        case 1: argValue = cursor.readUint64().toString(); break;
+        case 2: argValue = cursor.readFloat32();           break;
+        case 3: argValue = cursor.readFloat64();           break;
+        case 4: argValue = readFText(cursor, Infinity);    break;
+        case 5: argValue = cursor.readInt64().toString();  break;
+        default: throw new Error(`readFText: unknown FFormatArgumentValue type ${argType} in AsNumber`);
+      }
+      const sourceValue = { type: argType, value: argValue };
+      const bHasFormatOptions = cursor.readUint32();
+      let formatOptions = null;
+      if (bHasFormatOptions) {
+        formatOptions = {
+          alwaysSign:    cursor.readUint32(),
+          useGrouping:   cursor.readUint32(),
+          roundingMode:  cursor.readInt8(),
+          minIntDigits:  cursor.readInt32(),
+          maxIntDigits:  cursor.readInt32(),
+          minFracDigits: cursor.readInt32(),
+          maxFracDigits: cursor.readInt32(),
+        };
+      }
+      const bHasCulture = cursor.readUint32();
+      let culture = null, cultureIsNull = false;
+      if (bHasCulture) {
+        const cFS = cursor.readFString();
+        culture = cFS.value;
+        cultureIsNull = cFS.isNull;
+      }
+      return new FTextValue({ flags, historyType: 4, sourceValue, formatOptions, culture, cultureIsNull });
+    }
+    // Unknown history type: preserve remaining bytes verbatim for round-trip.
+    // When called from an array-element context sizeHint is Infinity because
+    // the per-element byte budget is unknown — throw so the callers can decide
+    // whether to fall back to OpaqueValue at the element or array level.
+    if (!isFinite(sizeHint)) throw new Error(`readFText: unimplemented historyType ${historyType} (no size budget; cannot store raw bytes)`);
+    const remaining = sizeHint - (cursor.pos() - start);
+    const raw = remaining > 0 ? cursor.readBytes(remaining).slice() : new Uint8Array(0);
+    return new FTextValue({ flags, historyType, _raw: raw });
+  } catch (e) {
+    // When sizeHint is Infinity we cannot capture a byte-safe OpaqueValue;
+    // rethrow so the nearest finite-budget caller (readValue's array/map catch)
+    // handles it. A caller with a finite budget does cursor.seek(start) + OpaqueValue.
+    if (!isFinite(sizeHint)) throw e;
+    cursor.seek(start);
+    return new OpaqueValue(cursor.readBytes(sizeHint).slice(), `TextProperty decode failed: ${e.message}`);
+  }
+}
+
+function writeFText(writer, value) {
+  writer.writeUint32(value.flags);
+  writer.writeInt8(value.historyType);
+  if (value.historyType === -1) {
+    const has = value.displayString != null ? 1 : 0;
+    writer.writeInt32(has);
+    if (has) writer.writeFString(value.displayString, null, value._displayStringIsNull);
+  } else if (value.historyType === 0) {
+    writer.writeFString(value.namespace ?? '',    null, value._namespaceIsNull);
+    writer.writeFString(value.key ?? '',          null, value._keyIsNull);
+    writer.writeFString(value.sourceString ?? '', null, value._sourceStringIsNull);
+  } else if (value.historyType === 2) {
+    writeFText(writer, value.sourceFmt);
+    writer.writeInt32(value.arguments.length);
+    for (const arg of value.arguments) {
+      writer.writeInt8(arg.type);
+      switch (arg.type) {
+        case 0: writer.writeInt64(arg.value);   break;
+        case 1: writer.writeUint64(arg.value);  break;
+        case 2: writer.writeFloat32(arg.value); break;
+        case 3: writer.writeFloat64(arg.value); break;
+        case 4: writeFText(writer, arg.value);  break;
+        case 5: writer.writeInt8(arg.value);    break;
+        default: throw new Error(`writeFText: unknown ArgumentFormat ContentType ${arg.type}`);
+      }
+    }
+  } else if (value.historyType === 4) {
+    const sv = value.sourceValue;
+    writer.writeInt8(sv.type);
+    switch (sv.type) {
+      case 0: writer.writeInt64(sv.value);   break;
+      case 1: writer.writeUint64(sv.value);  break;
+      case 2: writer.writeFloat32(sv.value); break;
+      case 3: writer.writeFloat64(sv.value); break;
+      case 4: writeFText(writer, sv.value);  break;
+      case 5: writer.writeInt64(sv.value);   break;
+      default: throw new Error(`writeFText: unknown FFormatArgumentValue type ${sv.type} in AsNumber`);
+    }
+    // Legacy uint32 booleans — see readFText AsNumber for rationale.
+    const hasFormatOptions = value.formatOptions != null;
+    writer.writeUint32(hasFormatOptions ? 1 : 0);
+    if (hasFormatOptions) {
+      const f = value.formatOptions;
+      writer.writeUint32(f.alwaysSign);
+      writer.writeUint32(f.useGrouping);
+      writer.writeInt8(f.roundingMode);
+      writer.writeInt32(f.minIntDigits);
+      writer.writeInt32(f.maxIntDigits);
+      writer.writeInt32(f.minFracDigits);
+      writer.writeInt32(f.maxFracDigits);
+    }
+    const hasCulture = value.culture != null;
+    writer.writeUint32(hasCulture ? 1 : 0);
+    if (hasCulture) writer.writeFString(value.culture, null, value._cultureIsNull);
+  } else {
+    if (value._raw) writer.writeBytes(value._raw);
+  }
+}
+
+// -------- ObjectProperty (top-level shape) --------
+//
+// Soulmask ObjectProperty values vary in shape based on the tag's size budget:
+//
+//   tag.size = 1                 → just the kind byte. No path/classPath FString
+//                                  on the wire at all.
+//   tag.size > 1, no embedded    → kind + path FString. classPath FString may
+//                                  also be present if the budget extends past
+//                                  the path.
+//   tag.size encloses an FString
+//   property stream              → kind + path + classPath + nested stream
+//                                  terminated by None.
+//
+// The presence/absence of each FString matters for byte-identical round-trip:
+// `path: null` means "not on the wire", whereas `path: ''` (with isNull flag)
+// preserves the wire's choice between null-form (SaveNum=0, 4 bytes) and
+// empty-with-terminator (SaveNum=1 plus 1-byte NUL, 5 bytes). The previous
+// version always wrote `writeFString(this.path)` for ObjectRef and emitted
+// a 4-byte null FString even for kind-only values — silently inflating the
+// encoded blob by 4 B for every kind-only reference.
+function readObjectValue(cursor, sizeHint) {
+  const start = cursor.pos();
+  try {
+    const kind = cursor.readUint8();
+    // sizeHint=1 → value is just the kind byte (null/bare reference).
+    if (cursor.pos() - start >= sizeHint) {
+      return new ObjectRef({ kind });
+    }
+    // Soulmask kind=0x01 (hard actor reference, e.g. HBindBGCompActor on
+    // NPC pawns) prepends a 4-byte field between the kind byte and the
+    // path FString. Observed value is always 1; semantic unknown — captured
+    // verbatim and replayed on write. Without this branch the reader treats
+    // those four bytes as the path FString's SaveNum, which overshoots the
+    // budget and falls back to OpaqueValue (the symptom that hid every
+    // pawn→inventory link from ReferencesService).
+    let kindOnePrefix = null;
+    if (kind === 0x01) {
+      kindOnePrefix = cursor.readUint32();
+      if (cursor.pos() - start >= sizeHint) {
+        return new ObjectRef({ kind, kindOnePrefix });
+      }
+    }
+    const pathFS = cursor.readFString();
+    // Guard against path FStrings whose SaveNum overshoots the value budget —
+    // this happens for properties whose format differs from kind+path+... and
+    // whose first "path" bytes happen to encode a huge length.
+    if (cursor.pos() - start > sizeHint) throw new Error('path FString exceeded value budget');
+    if (cursor.pos() - start >= sizeHint) {
+      return new ObjectRef({ kind, kindOnePrefix, path: pathFS.value, pathIsNull: pathFS.isNull });
+    }
+    const classPathFS = cursor.readFString();
+    if (cursor.pos() - start > sizeHint) throw new Error('classPath FString exceeded value budget');
+    if (cursor.pos() - start >= sizeHint) {
+      return new ObjectRef({ kind, kindOnePrefix,
+                             path: pathFS.value, pathIsNull: pathFS.isNull,
+                             classPath: classPathFS.value, classPathIsNull: classPathFS.isNull });
+    }
+    const stream = readPropertyStream(cursor, start + sizeHint);
+    // Some Soulmask embedded streams (e.g. JianZhuInstGLQComponent) use the
+    // outermost-stream None trailer (4-byte FName.Number). Skip it when
+    // exactly 4 bytes remain within the tag's size budget, and record that
+    // it was there so the writer can replay it for byte-identical round-trip.
+    let hasTerminatorTrailer = false;
+    if (stream.terminated && cursor.pos() + 4 === start + sizeHint && cursor.remaining() >= 4) {
+      cursor.skip(4);
+      hasTerminatorTrailer = true;
+    }
+    return new ObjectRef({ kind, kindOnePrefix,
+      path: pathFS.value, pathIsNull: pathFS.isNull,
+      classPath: classPathFS.value, classPathIsNull: classPathFS.isNull,
+      embedded: stream.properties, terminated: stream.terminated, hasTerminatorTrailer });
+  } catch (e) {
+    cursor.seek(start);
+    return new OpaqueValue(cursor.readBytes(sizeHint).slice(), `ObjectProperty decode failed: ${e.message}`);
+  }
+}
+
+function writeObjectValue(writer, value) {
+  if (value instanceof ObjectRef) { value.write(writer); return; }
+  // Bare-string fallback: write kind byte + path only.
+  writer.writeUint8(0x03);
+  writer.writeFString(value ?? '');
+}
+
+// -------- Array / Set / Map --------
+function readArrayValue(cursor, tag, sizeHint) {
+  const startOff = cursor.pos();
+  const numElements = cursor.readInt32();
+  const innerType = tag.innerType.value;
+  const elements = [];
+
+  if (innerType === 'StructProperty') {
+    const innerTag = PropertyTag.read(cursor);
+    if (innerTag.isTerminator || innerTag.type.value !== 'StructProperty') {
+      throw new Error(`readArrayValue: expected StructProperty inner tag, got ${innerTag.type?.value}`);
+    }
+    const structName = innerTag.structName.value;
+    const handler = STRUCT_HANDLERS[structName];
+    if (handler) {
+      for (let i = 0; i < numElements; i++) elements.push(new StructValue(structName, { value: handler.read(cursor) }));
+    } else {
+      for (let i = 0; i < numElements; i++) {
+        const stream = readPropertyStream(cursor, startOff + sizeHint);
+        elements.push(new StructValue(structName, { value: stream.properties, terminated: stream.terminated }));
+      }
+    }
+    return new ArrayValue({ elements, innerTag });
+  }
+
+  // ObjectProperty elements have variable wire shapes (kind-only, +path,
+  // +path+classPath, +full embedded stream) and no per-element delimiter.
+  // We give each element the FULL remaining array budget and let the
+  // field-presence heuristics in readArrayElement (saveNum magnitude,
+  // "/"-prefix on classPath, identifier-start on embedded-stream first
+  // byte) decide where to stop. Each element terminates at:
+  //   - kind-only (kind=0 early-out)
+  //   - end of path FString if no classPath byte pattern follows
+  //   - end of classPath FString if no embedded property-tag pattern follows
+  //   - the None terminator (+ optional 4-byte FName.Number trailer)
+  //
+  // Soulmask JianZhuInstYuanXings layout (the building-zone yuan-xing array)
+  // interleaves placement-binary AFTER each element: every kind=3 yuan-xing
+  // is followed by 8 zero bytes + 3 stride/count sections describing the
+  // placed-piece transforms, ids and aux data for THAT prototype. See
+  // tryReadObjectArrayPerElementBlock for the format and detection logic.
+  const isObj = isObjectInnerType(innerType);
+  const endOff = startOff + sizeHint;
+  const perElementTrailings = [];
+  let anyPerElementTrailing = false;
+  for (let i = 0; i < numElements; i++) {
+    let elemSizeHint = Infinity;
+    if (isObj) elemSizeHint = endOff - cursor.pos();
+    elements.push(readArrayElement(cursor, innerType, elemSizeHint));
+    if (isObj) {
+      const t = tryReadObjectArrayPerElementBlock(cursor, endOff);
+      if (t) anyPerElementTrailing = true;
+      perElementTrailings.push(t); // null when no per-element trailing for this element
+    }
+  }
+
+  return new ArrayValue({
+    elements,
+    perElementTrailings: anyPerElementTrailing ? perElementTrailings : null,
+  });
+}
+
+/**
+ * Per-element placement-binary block for ArrayProperty<ObjectProperty> in
+ * JianZhuInstYuanXings (Soulmask building-zone yuan-xing arrays). Each kind=3
+ * yuan-xing element is followed by a fixed-shape block:
+ *
+ *   [8 bytes zero header]
+ *   [u32 stride=64] [u32 count]  [count×64 bytes]   world 4×4 transforms (per placed piece)
+ *   [u32 stride= 4] [u32 count]  [count× 4 bytes]   per-piece u32 ids
+ *   [u32 stride=64] [u32 count]  [count×64 bytes]   per-piece aux (bbox + scale-ish floats)
+ *
+ * Returns { header, sections } on success. Returns null (cursor rolled back)
+ * when the bytes don't match — non-JianZhuInstYuanXings ObjectProperty arrays
+ * have no such block, so peeking-and-rolling-back keeps them unaffected.
+ *
+ * Verified by in-game experiment 2026-05-18: numElements counts UNIQUE
+ * prototypes (foundation, wall, door frame, …); section 0/1 counts are the
+ * placed-piece count for that prototype; section 2 count is typically that
+ * count or one greater. The earlier "single trailing block after all
+ * elements" model was wrong — these blocks are interleaved per element.
+ */
+function tryReadObjectArrayPerElementBlock(cursor, endOff) {
+  const start = cursor.pos();
+  // Minimum 8B header + 3 × 8B section header = 32B (zero-count is allowed).
+  if (endOff - start < 32) return null;
+  for (let i = 0; i < 8; i++) {
+    if (cursor.bytes[start + i] !== 0) return null;
+  }
+  // Section 0's stride must be 64. Used as the disambiguating signature.
+  if (cursor.dv.getUint32(start + 8, true) !== 64) return null;
+
+  try {
+    cursor.skip(8);
+    const header = cursor.bytes.subarray(start, start + 8).slice();
+    const sections = [];
+    const expected = [64, 4, 64];
+    for (let i = 0; i < 3; i++) {
+      if (endOff - cursor.pos() < 8) throw new Error(`section ${i} header overruns budget`);
+      const stride = cursor.readUint32();
+      const count  = cursor.readUint32();
+      if (stride !== expected[i]) throw new Error(`section ${i} stride ${stride} != ${expected[i]}`);
+      if (count > 1_000_000) throw new Error(`implausible count ${count}`);
+      const dataBytes = stride * count;
+      if (cursor.pos() + dataBytes > endOff) throw new Error(`section ${i} data overruns budget`);
+      sections.push({ stride, count, data: cursor.readBytes(dataBytes).slice() });
+    }
+    return { header, sections };
+  } catch {
+    cursor.seek(start);
+    return null;
+  }
+}
+
+function writeObjectArrayPerElementBlock(writer, block) {
+  writer.writeBytes(block.header);
+  for (const s of block.sections) {
+    writer.writeUint32(s.stride);
+    writer.writeUint32(s.count);
+    writer.writeBytes(s.data);
+  }
+}
+
+function isObjectInnerType(t) {
+  return t === 'ObjectProperty' || t === 'ClassProperty'
+      || t === 'WeakObjectProperty' || t === 'LazyObjectProperty'
+      || t === 'WSObjectProperty';
+}
+
+function writeArrayValue(writer, tag, value) {
+  const innerType = tag.innerType.value;
+  writer.writeInt32(value.elements.length);
+  if (innerType === 'StructProperty') {
+    value._arrayInnerTag.write(writer);
+    const structName = value._arrayInnerTag.structName.value;
+    const handler = STRUCT_HANDLERS[structName];
+    for (const e of value.elements) {
+      if (handler) handler.write(writer, e.value);
+      else writeNestedPropertyStream(writer, e.value);
+    }
+    return;
+  }
+  const perEl = value._perElementTrailings;
+  for (let i = 0; i < value.elements.length; i++) {
+    writeArrayElement(writer, innerType, value.elements[i]);
+    if (perEl && perEl[i]) writeObjectArrayPerElementBlock(writer, perEl[i]);
+  }
+}
+
+function readSetValue(cursor, tag) {
+  const innerType = tag.innerType.value;
+  const numToRemove = cursor.readInt32();
+  const removed = [];
+  for (let i = 0; i < numToRemove; i++) removed.push(readSetElement(cursor, innerType));
+  const numElements = cursor.readInt32();
+  const elements = [];
+  for (let i = 0; i < numElements; i++) elements.push(readSetElement(cursor, innerType));
+  return new SetValue({ removed, elements });
+}
+
+// Set elements for StructProperty inner type are raw binary structs with no
+// inner PropertyTag wrapper (unlike ArrayProperty<StructProperty>, which does
+// have one). Every observed Set<StructProperty> in world.db uses 16-byte Guids
+// as elements — the same assumption MapProperty makes for Struct keys.
+function readSetElement(cursor, innerType) {
+  if (innerType === 'StructProperty') return FGuid.read(cursor).value;
+  return readArrayElement(cursor, innerType);
+}
+
+function writeSetValue(writer, tag, value) {
+  const innerType = tag.innerType.value;
+  writer.writeInt32(value.removed.length);
+  for (const v of value.removed) writeSetElement(writer, innerType, v);
+  writer.writeInt32(value.elements.length);
+  for (const v of value.elements) writeSetElement(writer, innerType, v);
+}
+
+function writeSetElement(writer, innerType, value) {
+  if (innerType === 'StructProperty') { new FGuid(value).write(writer); return; }
+  writeArrayElement(writer, innerType, value);
+}
+
+function readMapValue(cursor, tag) {
+  const keyType = tag.innerType.value;
+  const valType = tag.valueType.value;
+  const numKeysToRemove = cursor.readInt32();
+  const removed = [];
+  for (let i = 0; i < numKeysToRemove; i++) removed.push(readMapElement(cursor, keyType, /*isKey=*/true));
+  const numElements = cursor.readInt32();
+  const entries = [];
+  for (let i = 0; i < numElements; i++) {
+    const key = readMapElement(cursor, keyType, /*isKey=*/true);
+    const val = readMapElement(cursor, valType, /*isKey=*/false);
+    entries.push({ key, value: val });
+  }
+  return new MapValue({ removed, entries });
+}
+
+function writeMapValue(writer, tag, value) {
+  const keyType = tag.innerType.value;
+  const valType = tag.valueType.value;
+  writer.writeInt32(value.removed.length);
+  for (const k of value.removed) writeMapElement(writer, keyType, k, /*isKey=*/true);
+  writer.writeInt32(value.entries.length);
+  for (const e of value.entries) {
+    writeMapElement(writer, keyType, e.key, /*isKey=*/true);
+    writeMapElement(writer, valType, e.value, /*isKey=*/false);
+  }
+}
+
+/**
+ * Map element (one key or one value) when the map's inner/value type is
+ * StructProperty — Soulmask uses several conventions that diverge from
+ * stock UE 4.27 here:
+ *
+ *   Key  (StructProperty)  → a raw 16-byte FGuid. The map tag declares
+ *                            no struct shape; every populated Map<Struct,_>
+ *                            we've observed in world.db (the guild
+ *                            manager maps in GAMEMODE) uses guids as
+ *                            keys. Other key shapes would need this
+ *                            assumption revisited.
+ *   Value (StructProperty) → EITHER a nested property stream
+ *                            (`GongHuiMap`, `PlayerGongHuiDataMap`,
+ *                            `GeRenJianZhuYingHuoList`, `GeRenMapRiZhi`)
+ *                            OR a raw 16-byte FGuid (`PlayerGongHuiMap`,
+ *                            a player→guild membership lookup).
+ *                            We sniff which by peeking ahead — a
+ *                            property stream starts with an FString
+ *                            length prefix for the first tag's name
+ *                            (small positive int, body is identifier
+ *                            chars + NUL); a Guid's first 4 bytes
+ *                            are arbitrary hex and almost never satisfy
+ *                            that pattern.
+ *
+ * For non-struct inner/value types we delegate to readArrayElement /
+ * writeArrayElement (array and set elements share the same wire shape
+ * as map keys/values for those types).
+ *
+ * Note: for these custom Soulmask maps the MapProperty's tag.size does
+ * NOT match the actual byte span of the data section (observed:
+ * tag.size=632838, actual=636422 for a populated GongHuiMap). The
+ * decoder advances the cursor based on pair count + per-pair shape,
+ * NOT the tag.size — which is why this works despite the size lie.
+ */
+function readMapElement(cursor, type, isKey) {
+  if (type !== 'StructProperty') return readArrayElement(cursor, type);
+  if (isKey) return FGuid.read(cursor).value;
+  if (peekLooksLikePropertyTag(cursor)) {
+    const stream = readPropertyStream(cursor);
+    return new StructValue('(map value)', { value: stream.properties, terminated: stream.terminated });
+  }
+  return FGuid.read(cursor).value;
+}
+
+function writeMapElement(writer, type, value, isKey) {
+  if (type !== 'StructProperty') { writeArrayElement(writer, type, value); return; }
+  if (isKey) { new FGuid(value).write(writer); return; }
+  // Distinguish on the decoded value's shape:
+  //   StructValue → property stream (write tags + None)
+  //   string      → 16-byte Guid
+  if (value instanceof StructValue && Array.isArray(value.value)) {
+    writePropertyStream(writer, value.value, false);
+    return;
+  }
+  if (typeof value === 'string') {
+    new FGuid(value).write(writer);
+    return;
+  }
+  throw new Error('writeMapElement: unexpected StructProperty map value shape');
+}
+
+/**
+ * Peek the next bytes of `cursor` (without advancing): do they look like
+ * the start of a PropertyTag — i.e. an FString that names a property?
+ *
+ * A property name FString is:
+ *   - int32 SaveNum > 0 and reasonably small (<= 64 chars in Soulmask)
+ *   - SaveNum bytes of ANSI body whose last byte is NUL
+ *   - body chars (minus NUL) are identifier-safe: A-Z, a-z, 0-9, _.
+ *
+ * Random GUID bytes effectively never satisfy this — the first uint32
+ * of a Guid is ~uniform over [0..2^32), and even when it lands in a
+ * "plausible length" range the printable-ASCII + NUL-terminator check
+ * eliminates the false positives.
+ */
+function peekLooksLikePropertyTag(cursor) {
+  if (cursor.remaining() < 8) return false;
+  const off = cursor.pos();
+  const len = cursor.dv.getInt32(off, true);
+  if (len <= 1 || len > 64) return false;
+  if (cursor.remaining() < 4 + len) return false;
+  if (cursor.bytes[off + 4 + len - 1] !== 0) return false;   // NUL terminator
+  for (let i = 0; i < len - 1; i++) {
+    const b = cursor.bytes[off + 4 + i];
+    const ok = b === 0x5F                          // _
+            || (b >= 0x30 && b <= 0x39)             // 0-9
+            || (b >= 0x41 && b <= 0x5A)             // A-Z
+            || (b >= 0x61 && b <= 0x7A);            // a-z
+    if (!ok) return false;
+  }
+  return true;
+}
+
+// Read/write one array OR set element of a non-struct inner type.
+// (No per-element FPropertyTag wrapper for these inner types.)
+//
+// `sizeHint` is the per-element byte budget; only ObjectProperty-family
+// inner types need it, since their wire shape is variable (kind-only,
+// kind+path, kind+path+classPath, or full kind+path+classPath+embedded).
+// Other inner types have fixed sizes determined by the type itself, so
+// they ignore the hint.
+function readArrayElement(cursor, innerType, sizeHint = Infinity) {
+  switch (innerType) {
+    case 'IntProperty':    return cursor.readInt32();
+    case 'Int8Property':   return cursor.readInt8();
+    case 'Int16Property':  return cursor.readInt16();
+    case 'Int64Property':  return cursor.readInt64().toString();
+    case 'UInt16Property': return cursor.readUint16();
+    case 'UInt32Property': return cursor.readUint32();
+    case 'UInt64Property': return cursor.readUint64().toString();
+    case 'FloatProperty':  return cursor.readFloat32();
+    case 'DoubleProperty': return cursor.readFloat64();
+    case 'BoolProperty':   return cursor.readUint8() !== 0;
+    case 'ByteProperty':   return cursor.readUint8();
+    case 'EnumProperty':   return FName.read(cursor);
+    case 'NameProperty':   return FName.read(cursor);
+    case 'StrProperty':    return cursor.readFString().value;
+    case 'TextProperty':
+      // TextProperty elements are self-delimiting (FText is a self-describing
+      // format); sizeHint is passed as Infinity since per-element size isn't
+      // available. HistoryType -1, 0, and 2 all read cleanly without it.
+      return readFText(cursor, Infinity);
+    case 'ObjectProperty':
+    case 'ClassProperty':
+    case 'WeakObjectProperty':
+    case 'LazyObjectProperty':
+    case 'WSObjectProperty': {
+      // Bounded read, mirroring readObjectValue. The variable wire shapes
+      // (kind-only, +path, +path+classPath, +embedded) are disambiguated by
+      // sizeHint — without the bound we'd read past the element into the
+      // next property's tag, which causes catastrophic cascade failures
+      // (cf. ChengHaoList in serial 92 and friends). Capture per-FString
+      // isNull flags for byte-identical round-trip of empty wire-FStrings.
+      // Soulmask kind=0x01 carries a 4-byte prefix (see readObjectValue).
+      const start = cursor.pos();
+      const kind = cursor.readUint8();
+      if (cursor.pos() - start >= sizeHint) {
+        return new ObjectRef({ kind });
+      }
+      // kind=0 is a null/None object reference: the wire payload is just the
+      // kind byte with no path, classPath, or embedded stream. Without this
+      // early-out, the FString reader would interpret the next 4 bytes (which
+      // belong to either the next element or the trailing binary section)
+      // as a path saveNum — typically a huge garbage value that overshoots
+      // the array. Seen in JianZhuInstYuanXings, ZhuangBeiLanDaoJuJiYiList,
+      // and KuaiJieLanDaoJuJiYiList trailing slots.
+      if (kind === 0) {
+        return new ObjectRef({ kind });
+      }
+      let kindOnePrefix = null;
+      if (kind === 0x01) {
+        kindOnePrefix = cursor.readUint32();
+        if (cursor.pos() - start >= sizeHint) {
+          return new ObjectRef({ kind, kindOnePrefix });
+        }
+      }
+      const pathFS = cursor.readFString();
+      if (cursor.pos() - start > sizeHint) throw new Error('path FString exceeded array-element budget');
+      {
+        const consumed = cursor.pos() - start;
+        const remainingBudget = sizeHint - consumed;
+        // Guard 1: no room for even a null-form classPath FString (4 bytes).
+        // This catches floor() rounding error in the equal-split heuristic
+        // (e.g. budget=86 but actual element size=85).
+        if (consumed >= sizeHint || remainingBudget < 4) {
+          return new ObjectRef({ kind, kindOnePrefix, path: pathFS.value, pathIsNull: pathFS.isNull });
+        }
+        // Guard 2: peek the candidate classPath SaveNum. If it's outside the
+        // range of any plausible path string (≤ 1024 chars, or a negative
+        // UTF-16 length in the same range), the budget was inflated by a large
+        // trailing binary section (e.g. JianZhuInstYuanXings inside
+        // JianZhuInstGLQComponent.embedded) and there is no classPath.
+        const peekSN = cursor.dv.getInt32(cursor.pos(), true);
+        if (peekSN > 1024 || peekSN < -1024) {
+          return new ObjectRef({ kind, kindOnePrefix, path: pathFS.value, pathIsNull: pathFS.isNull });
+        }
+        // Guard 3: in Soulmask, classPath is always an asset path of the form
+        // "/Script/Module.Class" or "/Game/...". The first content character
+        // is therefore "/" (0x2F). When the bytes after path are actually the
+        // start of the NEXT element (kind byte + optional kindOnePrefix +
+        // path saveNum), peekSN can fall in the [-1024, 1024] range — e.g.
+        // bytes `01 01 00 00` from a kind=1 element with kindOnePrefix=1 read
+        // as int32 = 257. The previous saveNum-magnitude guard misses this;
+        // checking the first content byte for '/' catches it cleanly. Allow
+        // empty/null forms (saveNum ∈ {-1, 0, 1}) as edge cases.
+        if (peekSN !== 0 && peekSN !== 1 && peekSN !== -1) {
+          const firstCharOff = cursor.pos() + 4;
+          if (peekSN > 0) {
+            // ANSI classPath: first content byte should be '/'
+            if (firstCharOff >= cursor.bytes.length || cursor.bytes[firstCharOff] !== 0x2F) {
+              return new ObjectRef({ kind, kindOnePrefix, path: pathFS.value, pathIsNull: pathFS.isNull });
+            }
+          } else {
+            // Unicode classPath: first content code unit should be '/\0' (2F 00 LE)
+            if (firstCharOff + 1 >= cursor.bytes.length ||
+                cursor.bytes[firstCharOff] !== 0x2F ||
+                cursor.bytes[firstCharOff + 1] !== 0x00) {
+              return new ObjectRef({ kind, kindOnePrefix, path: pathFS.value, pathIsNull: pathFS.isNull });
+            }
+          }
+        }
+      }
+      const classPathFS = cursor.readFString();
+      if (cursor.pos() - start > sizeHint) throw new Error('classPath FString exceeded array-element budget');
+      if (cursor.pos() - start >= sizeHint) {
+        return new ObjectRef({
+          kind, kindOnePrefix,
+          path: pathFS.value, pathIsNull: pathFS.isNull,
+          classPath: classPathFS.value, classPathIsNull: classPathFS.isNull,
+        });
+      }
+      // Guard 4: embedded-stream presence. Same problem as the classPath
+      // guards but one level deeper — when the element has classPath but
+      // NO embedded stream, the bytes that follow classPath are the start
+      // of the NEXT element (kind byte) or the trailing binary section
+      // (12 zero bytes of origin). An embedded stream begins with a
+      // PropertyTag, which starts with the property name FString. Property
+      // names are short identifiers (≤256 chars) starting with a letter or
+      // underscore, so we peek the candidate name saveNum and first content
+      // byte to disambiguate.
+      if (sizeHint - (cursor.pos() - start) >= 4) {
+        const peekNameSN = cursor.dv.getInt32(cursor.pos(), true);
+        if (peekNameSN <= 0 || peekNameSN > 256) {
+          return new ObjectRef({
+            kind, kindOnePrefix,
+            path: pathFS.value, pathIsNull: pathFS.isNull,
+            classPath: classPathFS.value, classPathIsNull: classPathFS.isNull,
+          });
+        }
+        const firstNameByte = cursor.bytes[cursor.pos() + 4];
+        const isIdentStart = firstNameByte != null && (
+          (firstNameByte >= 0x41 && firstNameByte <= 0x5A) ||  // A-Z
+          (firstNameByte >= 0x61 && firstNameByte <= 0x7A) ||  // a-z
+          firstNameByte === 0x5F                                // _
+        );
+        if (!isIdentStart) {
+          return new ObjectRef({
+            kind, kindOnePrefix,
+            path: pathFS.value, pathIsNull: pathFS.isNull,
+            classPath: classPathFS.value, classPathIsNull: classPathFS.isNull,
+          });
+        }
+      }
+      const stream = readPropertyStream(cursor, start + sizeHint);
+      // Trailer detection: some Soulmask embedded streams (notably the inner
+      // ObjectProperty streams in JianZhuInstYuanXings) carry the outermost-
+      // stream 4-byte FName.Number trailer after their None terminator. In the
+      // top-level readObjectValue this is detected by "exactly 4 bytes left in
+      // budget"; here in array elements the budget is generous (= remaining
+      // array bytes) so we detect via content instead: a trailer is typically
+      // 0x00000000 (FName.Number=0), and what follows is either the next
+      // element's kind byte (0x01/0x03, non-zero) or the trailing binary
+      // section's origin (12 zero bytes, also distinctive). If the next 4
+      // bytes are all zero AND there's at least one more byte we can consume
+      // them as the trailer for round-trip fidelity.
+      let hasTerminatorTrailer = false;
+      if (stream.terminated && cursor.pos() + 4 <= start + sizeHint && cursor.remaining() >= 4) {
+        const peekTrailer = cursor.dv.getInt32(cursor.pos(), true);
+        if (peekTrailer === 0) {
+          cursor.skip(4);
+          hasTerminatorTrailer = true;
+        }
+      }
+      return new ObjectRef({
+        kind, kindOnePrefix,
+        path: pathFS.value, pathIsNull: pathFS.isNull,
+        classPath: classPathFS.value, classPathIsNull: classPathFS.isNull,
+        embedded: stream.properties, terminated: stream.terminated, hasTerminatorTrailer,
+      });
+    }
+    case 'SoftObjectProperty':
+    case 'SoftClassProperty':
+      return new SoftObjectRef({ assetPath: cursor.readFString().value, subPath: cursor.readFString().value });
+    default:
+      throw new Error(`readArrayElement: unsupported innerType '${innerType}'`);
+  }
+}
+
+function writeArrayElement(writer, innerType, value) {
+  switch (innerType) {
+    case 'IntProperty':    writer.writeInt32(value);   return;
+    case 'Int8Property':   writer.writeInt8(value);    return;
+    case 'Int16Property':  writer.writeInt16(value);   return;
+    case 'Int64Property':  writer.writeInt64(value);   return;
+    case 'UInt16Property': writer.writeUint16(value);  return;
+    case 'UInt32Property': writer.writeUint32(value);  return;
+    case 'UInt64Property': writer.writeUint64(value);  return;
+    case 'FloatProperty':  writer.writeFloat32(value); return;
+    case 'DoubleProperty': writer.writeFloat64(value); return;
+    case 'BoolProperty':   writer.writeUint8(value ? 1 : 0); return;
+    case 'ByteProperty':   writer.writeUint8(value);   return;
+    case 'EnumProperty':
+    case 'NameProperty':   FName.from(value).write(writer); return;
+    case 'StrProperty':    writer.writeFString(value); return;
+    case 'TextProperty':
+      if (value instanceof FTextValue) { writeFText(writer, value); return; }
+      value.write(writer); return;  // OpaqueValue fallback
+    case 'ObjectProperty':
+    case 'ClassProperty':
+    case 'WeakObjectProperty':
+    case 'LazyObjectProperty':
+    case 'WSObjectProperty':
+      // Variable wire shape (kind-only, +path, +path+classPath, +embedded).
+      // ObjectRef.write decides per-field which to emit based on which
+      // fields were on the wire at read time (path === null means absent).
+      if (value instanceof ObjectRef) { value.write(writer); return; }
+      // Bare-string fallback for array-of-ObjectProperty.
+      writer.writeUint8(0x03);
+      writer.writeFString(value ?? '');
+      return;
+    case 'SoftObjectProperty':
+    case 'SoftClassProperty':
+      (value instanceof SoftObjectRef ? value : new SoftObjectRef(value)).write(writer);
+      return;
+    default:
+      throw new Error(`writeArrayElement: unsupported innerType '${innerType}'`);
+  }
+}
+
+// ==========================================================================
+// Property stream
+// ==========================================================================
+/**
+ * Read property tags until either a "None" terminator or `endOffset` is
+ * reached. `consumeTerminatorTrailer` is for the outermost stream only.
+ */
+export function readPropertyStream(cursor, endOffset = Infinity, consumeTerminatorTrailer = false) {
+  const properties = [];
+  while (cursor.pos() < endOffset && !cursor.eof()) {
+    const tag = PropertyTag.read(cursor);
+    if (tag.isTerminator) {
+      if (consumeTerminatorTrailer && cursor.pos() + 4 <= endOffset && cursor.remaining() >= 4) {
+        cursor.skip(4);
+      }
+      return { properties, terminated: true, endPos: cursor.pos() };
+    }
+    const valueStart = cursor.pos();
+    const value = readValue(cursor, tag, tag.size);
+    const valueEnd = cursor.pos();
+    const actualSize = valueEnd - valueStart;
+    let sizeMismatch = null;
+    if (actualSize !== tag.size) {
+      // Reader disagreed with the tag's claimed Size. Trust the tag and
+      // capture the discrepancy so the encoder can warn.
+      sizeMismatch = { expected: tag.size, actual: actualSize };
+      cursor.seek(valueStart + tag.size);
+    }
+    properties.push(new Property(tag, value, { sizeMismatch }));
+  }
+  return { properties, terminated: false, endPos: cursor.pos() };
+}
+
+export function writePropertyStream(writer, properties, emitTerminatorTrailer = false) {
+  for (const p of properties) {
+    if (p._sizeMismatch) {
+      throw new Error(`writePropertyStream: property '${p.name}' has _sizeMismatch (${JSON.stringify(p._sizeMismatch)}); cannot safely re-emit`);
+    }
+    p.tag.write(writer);
+    writeValue(writer, p.tag, p.value);
+  }
+  new FName('None').write(writer);
+  if (emitTerminatorTrailer) writer.writeInt32(0);
+}
+
+// Nested-stream wrapper. Imported by values.mjs (ObjectRef.write,
+// StructValue.write) to avoid needing a writePropertyStream re-export.
+// `emitTerminatorTrailer` defaults to false because nested streams in
+// stock UE 4.27 don't carry the 4-byte FName.Number trailer that the
+// outermost stream does — but some Soulmask embedded ObjectProperty
+// streams DO (see ObjectRef.hasTerminatorTrailer / readObjectValue's
+// trailer-skip detection), so callers can opt in.
+export function writeNestedPropertyStream(writer, properties, emitTerminatorTrailer = false) {
+  writePropertyStream(writer, properties, emitTerminatorTrailer);
+}
