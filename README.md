@@ -9,9 +9,10 @@ few Soulmask-specific quirks layered on top.
 wscodec parses the property stream into a JavaScript object tree and
 serializes it back. Repo: https://github.com/auroris/SoulmaskCodec.
 
-Zero runtime dependencies. Accepts uncompressed bytes, returns
-JavaScript objects, and vice versa. Round-trip is byte-identical
-against every actor in a tested `world.db` (`npm test`).
+Zero runtime dependencies. Runs in any modern browser and in Node
+(>=20). Accepts uncompressed bytes, returns JavaScript objects, and
+vice versa. Round-trip is byte-identical against every actor in a
+tested `world.db` (`npm test`).
 
 ## Scope
 
@@ -37,36 +38,75 @@ bytes themselves are always the unsigned `0x00000002`.
 
 ## Setup
 
-wscodec itself has zero runtime dependencies, but a realistic workflow
-also needs LZ4 decompression and a SQLite reader. The recommended
-stack:
+wscodec ships builds for every environment and has zero runtime
+dependencies. Pick whichever entry point matches how you load code.
 
-1. **Node.js LTS.** Install from <https://nodejs.org/>. On Windows, tick
-   the "Automatically install the necessary tools" checkbox in the
-   installer; this pulls in the Visual Studio Build Tools and Python
-   that `better-sqlite3` needs to compile its native bindings. Without
-   them `npm install better-sqlite3` will fail with a node-gyp error.
+### Browser, no build step
 
-2. **Install wscodec:**
+Classic script tag - the bundled global build attaches `wscodec` to
+`window`:
 
-   ```sh
-   npm install wscodec
-   ```
+```html
+<script src="https://cdn.jsdelivr.net/npm/wscodec"></script>
+<script>
+  const blob = wscodec.UnrealBlob.decode(uncompressedBytes);
+</script>
+```
 
-3. **Install the LZ4 + SQLite peers** when you need them:
+ES module - import the bundled single file from a CDN:
 
-   ```sh
-   npm install lz4-wasm-nodejs better-sqlite3
-   ```
+```html
+<script type="module">
+  import { UnrealBlob } from 'https://cdn.jsdelivr.net/npm/wscodec/dist/wscodec.mjs';
+  const blob = UnrealBlob.decode(uncompressedBytes);
+</script>
+```
 
-   - `lz4-wasm-nodejs` is pure WASM, no build step.
-   - `better-sqlite3` builds native bindings (hence the optional tools above).
+Both URLs serve the latest release; append `@x.y.z` to pin an exact
+version for production. `unpkg.com/wscodec` works the same way.
 
-The test suite uses both peers; if you're only consuming wscodec
-programmatically against bytes you already have in memory, neither
-peer is required.
+### Bundler or Node
+
+```sh
+npm install wscodec
+```
+
+```js
+import { UnrealBlob } from 'wscodec';      // ESM - bundlers, Node
+const { UnrealBlob } = require('wscodec'); // CommonJS
+```
+
+Bundlers (Vite, webpack, esbuild, ...) resolve the package to the
+unbundled ES modules in `src/`, so unused parts tree-shake away. The
+classic-script, single-file ESM, and CommonJS builds all carry the
+identical export set.
+
+### LZ4 + SQLite peers (database workflows only)
+
+wscodec consumes already-decompressed bytes. Reading a real `world.db`
+additionally needs LZ4 and a SQLite reader; install them when you need
+them:
+
+```sh
+npm install lz4-wasm-nodejs better-sqlite3
+```
+
+- `lz4-wasm-nodejs` is pure WASM, no build step.
+- `better-sqlite3` builds native bindings. On Windows, tick the
+  "Automatically install the necessary tools" checkbox in the Node.js
+  installer (<https://nodejs.org/>) so the Visual Studio Build Tools +
+  Python it needs are present; otherwise `npm install better-sqlite3`
+  fails with a node-gyp error.
+
+The test suite and the bundled scripts use both peers; if you only call
+wscodec against bytes you already hold in memory, neither is required.
 
 ## API
+
+Examples below import from the `wscodec` package specifier (bundlers
+and Node). In a browser without a bundler, import from a CDN URL
+instead (see [Setup](#setup)) or use the matching `wscodec.*` global
+from the classic-script build - the export names are identical.
 
 ### Top-level
 
@@ -304,6 +344,57 @@ original when the wire's `tag.size` over-stated the actual value byte
 count (some Soulmask Maps do this); the bytes still decode to the same
 object tree, and tested in-game loads accept both forms.
 
+## Translations
+
+Decoded blobs are full of Soulmask's internal identifiers - blueprint
+paths like `/Game/Blueprints/DaoJu/.../BP_WuQi_Dao_2_C`, class `FName`s,
+and numeric IDs. The optional `wscodec/translations` module resolves
+them to English display names. It is a separate, opt-in subpath export;
+the core `wscodec` import does not pull it in.
+
+```js
+import { translate, item, gift } from 'wscodec/translations';
+
+// translate(key) scans every table and returns the first match - handy
+// when the key's category is unknown.
+translate('/Game/Blueprints/DaoJu/.../BP_WuQi_Dao_2.BP_WuQi_Dao_2_C'); // 'Beast Bone Blade'
+translate('BP_GongZuoTai_CheChuang_C');                                 // 'Power Workshop'
+
+// ~39 numeric IDs exist in more than one table - fashion costume IDs
+// overlap NPC gift IDs. Pass a table name to disambiguate.
+translate(100011);            // first match (a fashion costume)
+translate(100011, 'gifts');   // 'Swift Pace'
+gift(100011);                 // 'Swift Pace' - same, via the typed lookup
+item('BP_WuQi_Dao_2_C');      // 'Beast Bone Blade'
+```
+
+| function | resolves | key |
+|---|---|---|
+| `translate(k[, kind])` | first match across all tables, or `kind` only | any key |
+| `item(c)` | items | class or object path |
+| `npc(c)` | NPCs | character class |
+| `building(c)` | buildings / workbenches | class |
+| `recipe(id)` | recipes | recipe id (`WuQI_Dao_2`) |
+| `proficiency(id)` | proficiencies | id (`FaMu`) |
+| `mastery(id)` | combat skills | numeric id |
+| `fashion(id)`, `tattoo(id)` | cosmetics | numeric id |
+| `gift(id)` | NPC traits / gifts | numeric id |
+| `setting(code)` | game-rule settings | code (`ExpRatio`) |
+| `category(id)` | item categories | numeric id |
+| `attribute(c)` | attributes | attribute class |
+
+Every lookup returns `null` for an unknown key. The raw tables are also
+exported as `tables` (`tables.items`, `tables.gifts`, ...), and their
+names are the valid `kind` arguments to `translate`. For a classic
+`<script>`, `dist/wscodec-translations.global.js` exposes the same API
+as a `wscodecTranslations` global.
+
+The data ships with the package - names only, no descriptions, icons, or
+stats. It is generated from a game-data CSV export by
+`scripts/build-translations.mjs` (`npm run build-translations`), which
+maintainers re-run after a game patch. The raw export lives in a
+gitignored `ext/` directory and is not part of the package.
+
 ## LZ4 integration
 
 `actor_data` column bytes come out of LZ4 compression. wscodec
@@ -455,8 +546,9 @@ node scripts/find-string.mjs /path/to/world.db "Claude's Chest"
 node scripts/dump-actor.mjs /path/to/world.db <actor_serial> [out.json]
 
 # Merge every workbench access log, NPC work log, and clan log into a single
-# timestamp-sorted .log file. .NET ticks → ISO-8601 UTC; FText placeholders
-# substituted into their NamedFormat / OrderedFormat templates.
+# timestamp-sorted .log file. Local-time stamps matching the in-game clock;
+# every line the same shape (<timestamp> <event> · <source>). FText
+# placeholders are substituted into their NamedFormat / OrderedFormat templates.
 npm run dump-logs -- /path/to/world.db world.log
 ```
 

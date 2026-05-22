@@ -10,7 +10,7 @@
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 
-import { UnrealBlob, blobToJSONString } from '../wscodec.mjs';
+import { UnrealBlob, blobToJSONString } from '../src/wscodec.mjs';
 
 const _lz4 = await import('lz4-wasm-nodejs');
 const require = createRequire(import.meta.url);

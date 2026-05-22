@@ -26,7 +26,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 
-import { jsonToBlob, jsonReviver } from '../wscodec.mjs';
+import { jsonToBlob, jsonReviver } from '../src/wscodec.mjs';
 
 const _lz4 = await import('lz4-wasm-nodejs');
 const require = createRequire(import.meta.url);

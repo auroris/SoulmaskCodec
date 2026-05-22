@@ -45,9 +45,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 
-import { Writer } from '../io.mjs';
-import { writePropertyStream } from '../properties.mjs';
-import { UnrealBlob } from '../wscodec.mjs';
+import { Writer } from '../src/io.mjs';
+import { writePropertyStream } from '../src/properties.mjs';
+import { UnrealBlob } from '../src/wscodec.mjs';
 
 // wscodec itself takes uncompressed bytes; this test handles LZ4 inline.
 // `lz4-wasm-nodejs` is a devDependency just for the test.

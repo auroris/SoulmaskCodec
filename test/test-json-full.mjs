@@ -19,7 +19,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 
-import { UnrealBlob, blobToJSONString, jsonStringToBlob } from '../wscodec.mjs';
+import { UnrealBlob, blobToJSONString, jsonStringToBlob } from '../src/wscodec.mjs';
 
 const _lz4 = await import('lz4-wasm-nodejs');
 const require = createRequire(import.meta.url);
