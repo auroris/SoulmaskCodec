@@ -7,11 +7,15 @@
  * everywhere except the OUTERMOST None terminator (which still carries a
  * 4-byte FName.Number = 0 trailer, handled by the property-stream reader).
  *
- * `FName.read` / instance `write` therefore use the Soulmask form (bare
- * FString). The full UE form is exposed separately as `FName.readWithNumber`
- * / instance `writeWithNumber`: not used by Soulmask today, but wired up so
- * the codec can speak the standard wire format if the game's serializer ever
- * adopts it.
+ * `FName.fromReader` / instance `toBytes` therefore use the Soulmask form
+ * (bare FString). The full UE form is exposed separately as
+ * `FName.fromReaderWithNumber` / instance `toBytesWithNumber`: not used by
+ * Soulmask today, but wired up so the codec can speak the standard wire
+ * format if the game's serializer ever adopts it.
+ *
+ * Method names match the codec convention (`fromReader` / `toBytes`)
+ * shared by PropertyTag, PropertyStream, Property subclasses, and the
+ * value classes (ObjectRef, StructValue, FTextValue, etc.).
  */
 
 const ZERO_GUID = '00000000-0000-0000-0000-000000000000';
@@ -22,7 +26,7 @@ export class FName {
     this.isUnicode = isUnicode;
     // FName.Number: zero in every observed Soulmask FName (the wire form
     // omits it). Preserved on the instance for round-trip when the full UE
-    // form is used via readWithNumber/writeWithNumber.
+    // form is used via fromReaderWithNumber/toBytesWithNumber.
     this.number = number;
     // Tracks the wire-form distinction between an FString with SaveNum=0
     // (the "null" form) and SaveNum=1 (empty-with-terminator). Only ever
@@ -31,34 +35,43 @@ export class FName {
     this.isNull = isNull;
   }
   toString() { return this.value; }
-  /** JSON-friendly form: the bare name string (drops isUnicode/number/isNull metadata). */
-  toJSON() { return this.value; }
+  /**
+   * JSON-friendly form. Returns the bare name string when all wire flags
+   * are at their defaults (the common case); returns the rich object form
+   * `{value, isUnicode, isNull, number}` when any flag is non-default, so
+   * the wire metadata round-trips through JSON. `FName.from` accepts both
+   * shapes.
+   */
+  toJSON() {
+    if (!this.isUnicode && !this.isNull && (this.number | 0) === 0) return this.value;
+    return { value: this.value, isUnicode: this.isUnicode, isNull: this.isNull, number: this.number };
+  }
 
   /**
    * Read an FName in the Soulmask property-stream form: a bare FString,
    * no trailing FName.Number. `number` is left at 0.
    */
-  static read(cursor) {
+  static fromReader(cursor) {
     const s = cursor.readFString();
     return new FName(s.value, { isUnicode: s.isUnicode, isNull: !!s.isNull });
   }
 
   /** Write the Soulmask form (FString only). */
-  write(writer) { writer.writeFString(this.value, this.isUnicode, this.isNull); }
+  toBytes(writer) { writer.writeFString(this.value, this.isUnicode, this.isNull); }
 
   /**
    * Read an FName in the stock UE 4.27 property-tag form: FString + int32
    * Number. Use this if you're decoding a non-Soulmask stream or a future
    * Soulmask wire format that re-adopts the int32 suffix.
    */
-  static readWithNumber(cursor) {
+  static fromReaderWithNumber(cursor) {
     const s = cursor.readFString();
     const number = cursor.readInt32();
     return new FName(s.value, { isUnicode: s.isUnicode, isNull: !!s.isNull, number });
   }
 
   /** Write the stock UE form (FString + int32 Number). */
-  writeWithNumber(writer) {
+  toBytesWithNumber(writer) {
     writer.writeFString(this.value, this.isUnicode, this.isNull);
     writer.writeInt32(this.number | 0);
   }
@@ -108,15 +121,15 @@ export class FGuid {
   /** All-zero FGuid sentinel. New instance per call (FGuid is mutable). */
   static zero() { return new FGuid(ZERO_GUID); }
 
-  static read(cursor) {
+  static fromReader(cursor) {
     const A = cursor.readUint32(), B = cursor.readUint32(), C = cursor.readUint32(), D = cursor.readUint32();
     const h = (n, w) => n.toString(16).padStart(w, '0').toUpperCase();
     return new FGuid(`${h(A, 8)}-${h(B >>> 16, 4)}-${h(B & 0xFFFF, 4)}-${h(C >>> 16, 4)}-${h(C & 0xFFFF, 4)}${h(D, 8)}`);
   }
 
-  write(writer) {
+  toBytes(writer) {
     const m = String(this.value).match(/^([0-9A-Fa-f]{8})-([0-9A-Fa-f]{4})-([0-9A-Fa-f]{4})-([0-9A-Fa-f]{4})-([0-9A-Fa-f]{4})([0-9A-Fa-f]{8})$/);
-    if (!m) throw new Error(`FGuid.write: invalid FGuid string '${this.value}'`);
+    if (!m) throw new Error(`FGuid.toBytes: invalid FGuid string '${this.value}'`);
     const A = parseInt(m[1], 16);
     const B = (parseInt(m[2], 16) << 16) | parseInt(m[3], 16);
     const C = (parseInt(m[4], 16) << 16) | parseInt(m[5], 16);

@@ -1,21 +1,21 @@
 /**
- * JSON-roundtrip spot-check.
+ * JSON round-trip spot-check.
  *
- * Picks representative rows from world.db that exercise different codec paths
- * (StructProperty propStream form, ArrayProperty<StructProperty>,
+ * Picks representative rows from world.db that exercise different codec
+ * paths (StructProperty propStream form, ArrayProperty<StructProperty>,
  * MapProperty<StructProperty,StructProperty>, embedded ObjectRef with
  * hasTerminatorTrailer, kindOnePrefix, perElementTrailings, FText
- * historyType=2, and OpaqueValue carry-through), then for each:
+ * historyType=2, OpaqueValue/OpaqueProperty carry-through), then for each:
  *
- *   db_row -> LZ4 decompress -> UnrealBlob.decode  ─► (1) ORIGINAL_BYTES
- *   blob   -> blobToJSON     -> JSON.stringify    ─► json string
- *   json   -> JSON.parse     -> jsonToBlob        -> serialize  ─► (2) RE_BYTES
- *   compare (1) and (2) — expect byte-identical.
+ *   db_row → LZ4 decompress → UnrealBlob.fromBytes      → ORIGINAL_BYTES (re-encoded)
+ *   blob   → blob.toJSONString                          → json string
+ *   json   → UnrealBlob.fromJSONString  → toBytes       → RE_BYTES
+ *   compare ORIGINAL_BYTES and RE_BYTES — expect byte-identical.
  *
- * Each picked row is reported PASS or FAIL; on FAIL the first divergence is
+ * Each picked row reports PASS or FAIL; on FAIL the first divergence is
  * printed with surrounding bytes so the bug is locatable.
  *
- * Usage: node test/test-json-roundtrip.mjs <path-to-world.db>
+ * Usage: node test/test-json-roundtrip.mjs /path/to/world.db
  */
 
 import fs from 'node:fs';
@@ -23,7 +23,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 
-import { UnrealBlob, blobToJSONString, jsonStringToBlob } from '../src/wscodec.mjs';
+import { UnrealBlob } from '../src/wscodec.mjs';
+import { ObjectProperty } from '../src/properties/object.mjs';
+import { StructProperty, StructValue } from '../src/properties/struct.mjs';
+import { ArrayProperty } from '../src/properties/array.mjs';
+import { SetProperty } from '../src/properties/set.mjs';
+import { MapProperty } from '../src/properties/map.mjs';
+import { TextProperty, FTextValue } from '../src/properties/text.mjs';
+import { OpaqueProperty, OpaqueValue } from '../src/properties/opaque.mjs';
+import { PropertyStream } from '../src/property-stream.mjs';
 
 const _lz4 = await import('lz4-wasm-nodejs');
 const require = createRequire(import.meta.url);
@@ -41,27 +49,29 @@ console.log(`Database: ${dbPath}`);
 console.log(`Rows: ${rows.length}`);
 console.log('');
 
-// ── Pick rows by feature ────────────────────────────────────────────────────
-// Each criterion returns true when a decoded blob exhibits the feature.
-// The picker walks rows once and grabs the first match for each criterion.
-function visitAllProps(props, visit) {
-  if (!Array.isArray(props)) return;
-  for (const p of props) {
+const origWarn = console.warn;
+console.warn = () => {};
+
+// Recursively visit every Property in a decoded tree.
+function visitAllProps(stream, visit) {
+  if (!(stream instanceof PropertyStream)) return;
+  for (const p of stream.properties) {
     visit(p);
-    const v = p.value;
-    if (!v || typeof v !== 'object') continue;
-    if (v.embedded) visitAllProps(v.embedded, visit);
-    if (v._structName && Array.isArray(v.value)) visitAllProps(v.value, visit);
-    if (Array.isArray(v.elements)) {
-      for (const e of v.elements) {
-        if (e && e._structName && Array.isArray(e.value)) visitAllProps(e.value, visit);
-        if (e && e.embedded) visitAllProps(e.embedded, visit);
+    // ObjectProperty: descend into ref.embedded
+    if (p instanceof ObjectProperty && p.value?.embedded) visitAllProps(p.value.embedded, visit);
+    // StructProperty: propStream form has a stream
+    if (p instanceof StructProperty && p.value?.form === 'propStream') visitAllProps(p.value.stream, visit);
+    // Array/Set elements: nested struct or ObjectRef
+    if (p instanceof ArrayProperty || p instanceof SetProperty) {
+      for (const e of (p.elements ?? [])) {
+        if (e instanceof StructValue && e.form === 'propStream') visitAllProps(e.stream, visit);
+        if (e && typeof e === 'object' && e.embedded instanceof PropertyStream) visitAllProps(e.embedded, visit);
       }
     }
-    if (Array.isArray(v.entries)) {
-      for (const ent of v.entries) {
-        if (ent.value && ent.value._structName && Array.isArray(ent.value.value)) visitAllProps(ent.value.value, visit);
-        if (ent.key   && ent.key._structName   && Array.isArray(ent.key.value))   visitAllProps(ent.key.value, visit);
+    // Map entries: struct values may be propStream
+    if (p instanceof MapProperty) {
+      for (const ent of (p.entries ?? [])) {
+        if (ent.value instanceof StructValue && ent.value.form === 'propStream') visitAllProps(ent.value.stream, visit);
       }
     }
   }
@@ -75,12 +85,11 @@ function decodeRow(row) {
   let inner;
   try { inner = _lz4.decompress(u8.subarray(4)); } catch { return null; }
   let blob;
-  try { blob = UnrealBlob.decode(inner); } catch { return null; }
-  if (blob.error) return null;
+  try { blob = UnrealBlob.fromBytes(inner); } catch { return null; }
+  if (!blob.terminated) return null;
   return { row, inner, blob };
 }
 
-// Criteria, in priority order. Each picks ONE row.
 const criteria = [
   ['smallest blob (sanity)', (info, state) => {
     if (state.minLen === undefined || info.inner.length < state.minLen) {
@@ -91,22 +100,22 @@ const criteria = [
   }],
   ['has StructProperty propStream form', (info) => {
     let hit = false;
-    visitAllProps(info.blob.properties, (p) => {
-      if (p.tag?.type?.value === 'StructProperty' && Array.isArray(p.value?.value)) hit = true;
+    visitAllProps(info.blob.stream, (p) => {
+      if (p instanceof StructProperty && p.value?.form === 'propStream') hit = true;
     });
     return hit;
   }],
   ['has ArrayProperty<StructProperty>', (info) => {
     let hit = false;
-    visitAllProps(info.blob.properties, (p) => {
-      if (p.tag?.type?.value === 'ArrayProperty' && p.tag.innerType?.value === 'StructProperty') hit = true;
+    visitAllProps(info.blob.stream, (p) => {
+      if (p instanceof ArrayProperty && p.tag.innerType?.value === 'StructProperty') hit = true;
     });
     return hit;
   }],
   ['has MapProperty<StructProperty,StructProperty>', (info) => {
     let hit = false;
-    visitAllProps(info.blob.properties, (p) => {
-      if (p.tag?.type?.value === 'MapProperty'
+    visitAllProps(info.blob.stream, (p) => {
+      if (p instanceof MapProperty
           && p.tag.innerType?.value === 'StructProperty'
           && p.tag.valueType?.value === 'StructProperty') hit = true;
     });
@@ -114,51 +123,51 @@ const criteria = [
   }],
   ['has embedded ObjectRef with hasTerminatorTrailer', (info) => {
     let hit = false;
-    visitAllProps(info.blob.properties, (p) => {
-      if (p.value?.hasTerminatorTrailer) hit = true;
+    visitAllProps(info.blob.stream, (p) => {
+      if (p instanceof ObjectProperty && p.value?.hasTerminatorTrailer) hit = true;
     });
     return hit;
   }],
   ['has ObjectRef kindOnePrefix', (info) => {
     let hit = false;
-    visitAllProps(info.blob.properties, (p) => {
-      if (p.value?._kindOnePrefix != null) hit = true;
+    visitAllProps(info.blob.stream, (p) => {
+      if (p instanceof ObjectProperty && p.value?.kindOnePrefix != null) hit = true;
     });
     return hit;
   }],
-  ['has ArrayValue._perElementTrailings', (info) => {
+  ['has ArrayProperty.perElementTrailings', (info) => {
     let hit = false;
-    visitAllProps(info.blob.properties, (p) => {
-      if (p.value?._perElementTrailings) hit = true;
+    visitAllProps(info.blob.stream, (p) => {
+      if (p instanceof ArrayProperty && p.perElementTrailings) hit = true;
     });
     return hit;
   }],
-  ['has FText historyType=2 (ArgumentFormat)', (info) => {
+  ['has FText historyType=2 (OrderedFormat)', (info) => {
     let hit = false;
-    visitAllProps(info.blob.properties, (p) => {
-      const v = p.value;
-      if (v && v.historyType === 2) hit = true;
+    visitAllProps(info.blob.stream, (p) => {
+      if (p instanceof TextProperty && p.value instanceof FTextValue && p.value.historyType === 2) hit = true;
     });
     return hit;
   }],
-  ['has OpaqueValue (codec carry-through)', (info) => {
+  ['has OpaqueProperty / OpaqueValue', (info) => {
     let hit = false;
-    visitAllProps(info.blob.properties, (p) => {
-      if (p.value?.constructor?.name === 'OpaqueValue') hit = true;
+    visitAllProps(info.blob.stream, (p) => {
+      if (p instanceof OpaqueProperty) hit = true;
+      if (p instanceof TextProperty && p.value instanceof OpaqueValue) hit = true;
     });
     return hit;
   }],
   ['has SetProperty', (info) => {
     let hit = false;
-    visitAllProps(info.blob.properties, (p) => {
-      if (p.tag?.type?.value === 'SetProperty') hit = true;
+    visitAllProps(info.blob.stream, (p) => {
+      if (p instanceof SetProperty) hit = true;
     });
     return hit;
   }],
 ];
 
-const picks = new Map();          // label -> { row, inner, blob }
-const state = new Map();          // label -> per-criterion state (for smallest)
+const picks = new Map();
+const state = new Map();
 for (const [label] of criteria) state.set(label, {});
 
 for (const row of rows) {
@@ -170,7 +179,6 @@ for (const row of rows) {
   }
 }
 
-// ── Run the round-trip per pick ─────────────────────────────────────────────
 function compareBytes(a, b) {
   if (a.length !== b.length) return { ok: false, kind: 'length', at: -1, msg: `len ${b.length} vs ${a.length}` };
   for (let i = 0; i < a.length; i++) {
@@ -196,16 +204,13 @@ for (const [label] of criteria) {
   const { row, inner, blob } = pick;
   let result, jsonBytes;
   try {
-    const jstr = blobToJSONString(blob);
+    const jstr = blob.toJSONString();
     jsonBytes = jstr.length;
-    const blob2 = jsonStringToBlob(jstr);
-    const reBytes = blob2.serialize();
-    // Compare against the original encoded with the SAME recompute setting,
-    // not the wire bytes (which may carry inflated tag.sizes).
-    blob._dirty = true; blob._recomputeSizes = true;
-    const reOrig = blob.serialize();
+    const blob2 = UnrealBlob.fromJSONString(jstr);
+    const reBytes = blob2.toBytes();
+    const reOrig = blob.toBytes();
     const cmp = compareBytes(reOrig, reBytes);
-    result = { cmp, reBytes };
+    result = { cmp, reBytes, reOrig };
   } catch (e) {
     result = { error: e };
   }
@@ -220,12 +225,12 @@ for (const [label] of criteria) {
     console.log(`  [FAIL] ${label}  serial=${row.actor_serial}  size=${inner.length}B  json=${jsonBytes}B`);
     console.log(`         ${result.cmp.kind}-mismatch: ${result.cmp.msg}`);
     if (result.cmp.kind === 'byte') {
-      const o = ctxHex(inner, result.cmp.at);
+      const o = ctxHex(result.reOrig, result.cmp.at);
       const r = ctxHex(result.reBytes, result.cmp.at);
       console.log(`         orig @${o.start}: ${o.hex}`);
       console.log(`         re   @${r.start}: ${r.hex}`);
     } else if (result.cmp.kind === 'length') {
-      console.log(`         orig length: ${inner.length}, re length: ${result.reBytes.length}`);
+      console.log(`         orig length: ${result.reOrig.length}, re length: ${result.reBytes.length}`);
     }
     totalFail++;
     continue;
@@ -235,6 +240,8 @@ for (const [label] of criteria) {
   totalOrigBytes += inner.length;
   totalJsonBytes += jsonBytes;
 }
+
+console.warn = origWarn;
 
 console.log('');
 console.log('=== Summary ===');
