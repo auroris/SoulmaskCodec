@@ -84,10 +84,6 @@ export class ArrayProperty extends Property {
           elements.push(StructValue.fromReader(cursor, structName, innerTagSize, ctx));
         }
       }
-      // Sanity-check the wire's innerTag.size against the bytes we actually
-      // consumed for the elements. If they disagree, our understanding of
-      // either the inner-size semantics or the element decoder is wrong —
-      // throw so the bug is visible rather than papered over.
       const elemBytes = cursor.pos() - elemStart;
       if (innerTagSize !== elemBytes) {
         throw new Error(

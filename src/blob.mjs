@@ -2,7 +2,7 @@
  * UnrealBlob: top-level entry point for the wscodec.
  *
  *   UnrealBlob.fromBytes(u8, opts)   → parse uncompressed property-stream bytes
- *   blob.toBytes()                   → re-encode to bytes (always recomputed)
+ *   blob.toBytes()                   → re-encode to bytes
  *   UnrealBlob.fromJSON(j)           → reconstruct from a structured JSON tree
  *   blob.toJSON()                    → produce a JSON-safe tree
  *   UnrealBlob.fromJSONString(s)     → parse + reconstruct from a JSON string

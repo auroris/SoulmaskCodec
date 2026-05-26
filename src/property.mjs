@@ -7,7 +7,6 @@
  *     (codec bug: the value reader's consumed bytes != tag's claimed size).
  *   - `property.toBytes(writer, ctx)`: encode the value into a sub-buffer
  *     so the actual byte count is known, then emit tag(size) + value.
- *     No stored size, no `_dirty`, no `_recomputeSizes` opt-in.
  *
  * Subclasses implement:
  *   - `static fromReader(cursor, tag, sizeHint, ctx)` → instance
@@ -63,7 +62,7 @@ export class Property {
   /**
    * Read one property: tag + value. Throws on size mismatch (the value
    * reader consumed a different number of bytes than the tag claimed —
-   * that's a codec bug, not data we silently round-trip).
+   * that's a codec bug).
    *
    * Returns a `TerminatorProperty` when the tag's Name was "None"; the
    * caller (typically `PropertyStream.fromReader`) treats that as the

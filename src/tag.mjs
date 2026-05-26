@@ -18,12 +18,6 @@
  *   if Type == "MapProperty":     FString InnerType + FString ValueType
  *   u8       HasPropertyGuid
  *   if HasPropertyGuid:           FGuid PropertyGuid
- *
- * The `size` field is NOT stored on the in-memory tag. At read time it is
- * captured transiently in `tag._readSize` so the value reader knows its
- * byte budget; at write time the caller (Property.toBytes) computes the
- * size from actually-encoded value bytes and passes it to `toBytes(writer, size)`.
- * This removes the entire "stored size can go stale" failure mode.
  */
 
 import { FName, FGuid } from './primitives.mjs';
@@ -76,7 +70,7 @@ export class PropertyTag {
   /**
    * Emit the tag bytes. `size` is the byte count of the value payload that
    * will follow; the caller computes it by encoding the value into a sub-buffer
-   * and measuring. There's no stored size on the instance.
+   * and measuring.
    */
   toBytes(writer, size) {
     this.name.toBytes(writer);

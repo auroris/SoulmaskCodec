@@ -8,7 +8,7 @@
  *
  * The LZ4 layer is intentionally skipped: LZ4 has many valid encodings for
  * the same payload, so outer compressed bytes aren't byte-stable. The
- * decompressed property stream IS the canonical form.
+ * decompressed property stream is the canonical form.
  *
  * Categories:
  *
