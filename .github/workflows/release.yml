@@ -1,0 +1,77 @@
+name: Release Workflow
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  release:
+    name: Build, Tag, and Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Needed to create Git tags and releases
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetches all tags and history
+
+      - name: Read version from package.json
+        id: get_version
+        run: |
+          VERSION=$(node -e "console.log(require('./package.json').version)")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check if Git tag exists
+        id: check_tag
+        run: |
+          TAG="${{ steps.get_version.outputs.tag }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Tag $TAG already exists. Skipping release."
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Tag $TAG does not exist. Proceeding with release."
+          fi
+
+      - name: Set up Node.js
+        if: steps.check_tag.outputs.exists == 'false'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        if: steps.check_tag.outputs.exists == 'false'
+        run: npm ci
+
+      - name: Build and document
+        if: steps.check_tag.outputs.exists == 'false'
+        run: npm run build
+
+      - name: Create Zip Archive
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          zip -r wscodec-${{ steps.get_version.outputs.version }}.zip dist/ README.md LICENSE
+
+      - name: Push Git Tag
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          TAG="${{ steps.get_version.outputs.tag }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "$TAG"
+          git push origin "$TAG"
+
+      - name: Create GitHub Release
+        if: steps.check_tag.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.get_version.outputs.tag }}"
+          gh release create "$TAG" wscodec-${{ steps.get_version.outputs.version }}.zip \
+            --title "Release $TAG" \
+            --generate-notes
