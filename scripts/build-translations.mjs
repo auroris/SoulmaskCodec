@@ -79,7 +79,7 @@ function csvsIn(dir) {
 const SOURCES = [
   { cat: 'items',         files: ['Item/Item.csv'],              keyCols: ['class'], nameCol: 'name', keyKind: 'class' },
   { cat: 'npcs',          files: csvsIn('Npc'),                  keyCols: ['class'], nameCol: 'name', keyKind: 'class' },
-  { cat: 'buildings',     files: ['Recipe/Workbenches.csv'],     keyCols: ['class'], nameCol: 'name', keyKind: 'class' },
+  { cat: 'buildings',     files: ['Recipe/Workbenches.csv', 'Building/Building.csv'], keyCols: ['class'], nameCol: 'name', keyKind: 'class' },
   { cat: 'recipes',       files: csvsIn('Recipe').filter(f => !/Workbenches\.csv$/.test(f)), keyCols: ['id'], nameCol: 'name', keyKind: 'raw' },
   { cat: 'proficiencies', files: ['Proficiency/Proficiency.csv'], keyCols: ['id'], nameCol: 'name', keyKind: 'raw' },
   { cat: 'mastery',       files: ['Mastery/Mastery.csv'],        keyCols: ['id'], nameCol: 'name', keyKind: 'raw' },

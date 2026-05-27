@@ -232,7 +232,7 @@ for (const row of rows) {
       events.push({
         date: dt,
         line: `${fmtGameTime(dt)}   "${op}" ${verb} ${qualStr}${item} x${count}`
-            + `   ·  chest "${name}" (#${row.actor_serial})`,
+            + `   ·  container "${name}" (#${row.actor_serial})`,
       });
       stats.containerEntries++;
     }
