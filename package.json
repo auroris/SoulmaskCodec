@@ -1,6 +1,6 @@
 {
   "name": "wscodec",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Pure-JS codec for Soulmask actor_data property streams (UE 4.27 FPropertyTag wire format). Zero runtime dependencies. Accepts uncompressed bytes, returns JS objects, and vice versa. Round-trip byte-identical against every actor.",
   "type": "module",
   "main": "./dist/wscodec.cjs",
@@ -9,21 +9,21 @@
   "jsdelivr": "./dist/wscodec.global.js",
   "exports": {
     ".": {
-      "types": "./dist/types/wscodec.d.ts",
+      "types": "./dist/types/wscodec.d.mts",
       "import": "./src/wscodec.mjs",
       "require": "./dist/wscodec.cjs",
       "default": "./src/wscodec.mjs"
     },
     "./io": {
-      "types": "./dist/types/io.d.ts",
+      "types": "./dist/types/io.d.mts",
       "default": "./src/io.mjs"
     },
     "./primitives": {
-      "types": "./dist/types/primitives.d.ts",
+      "types": "./dist/types/primitives.d.mts",
       "default": "./src/primitives.mjs"
     },
     "./translations": {
-      "types": "./dist/types/translations.d.ts",
+      "types": "./dist/types/translations.d.mts",
       "import": "./src/translations.mjs",
       "require": "./dist/wscodec-translations.cjs",
       "default": "./src/translations.mjs"
