@@ -6,7 +6,7 @@
 
 # Class: ObjectRef
 
-Defined in: [properties/object.mjs:39](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/object.mjs#L39)
+Defined in: [properties/object.mjs:39](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/object.mjs#L39)
 
 Decoded ObjectProperty value. Carries every wire-form variant — kind-only,
 +path, +path+classPath, +embedded PropertyStream — plus the Soulmask
@@ -18,7 +18,7 @@ Decoded ObjectProperty value. Carries every wire-form variant — kind-only,
 
 > **new ObjectRef**(`opts?`): `ObjectRef`
 
-Defined in: [properties/object.mjs:51](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/object.mjs#L51)
+Defined in: [properties/object.mjs:51](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/object.mjs#L51)
 
 #### Parameters
 
@@ -78,7 +78,7 @@ Embedded stream's None terminator carried a 4-byte trailer.
 
 > **kind**: `number`
 
-Defined in: [properties/object.mjs:61](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/object.mjs#L61)
+Defined in: [properties/object.mjs:61](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/object.mjs#L61)
 
 ***
 
@@ -86,7 +86,7 @@ Defined in: [properties/object.mjs:61](https://github.com/auroris/SoulmaskCodec/
 
 > **kindOnePrefix**: `number`
 
-Defined in: [properties/object.mjs:65](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/object.mjs#L65)
+Defined in: [properties/object.mjs:65](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/object.mjs#L65)
 
 ***
 
@@ -94,7 +94,7 @@ Defined in: [properties/object.mjs:65](https://github.com/auroris/SoulmaskCodec/
 
 > **path**: `string`
 
-Defined in: [properties/object.mjs:66](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/object.mjs#L66)
+Defined in: [properties/object.mjs:66](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/object.mjs#L66)
 
 ***
 
@@ -102,7 +102,7 @@ Defined in: [properties/object.mjs:66](https://github.com/auroris/SoulmaskCodec/
 
 > **pathIsNull**: `boolean`
 
-Defined in: [properties/object.mjs:67](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/object.mjs#L67)
+Defined in: [properties/object.mjs:67](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/object.mjs#L67)
 
 ***
 
@@ -110,7 +110,7 @@ Defined in: [properties/object.mjs:67](https://github.com/auroris/SoulmaskCodec/
 
 > **classPath**: `string`
 
-Defined in: [properties/object.mjs:68](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/object.mjs#L68)
+Defined in: [properties/object.mjs:68](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/object.mjs#L68)
 
 ***
 
@@ -118,7 +118,7 @@ Defined in: [properties/object.mjs:68](https://github.com/auroris/SoulmaskCodec/
 
 > **classPathIsNull**: `boolean`
 
-Defined in: [properties/object.mjs:69](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/object.mjs#L69)
+Defined in: [properties/object.mjs:69](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/object.mjs#L69)
 
 ***
 
@@ -126,7 +126,7 @@ Defined in: [properties/object.mjs:69](https://github.com/auroris/SoulmaskCodec/
 
 > **embedded**: [`PropertyStream`](PropertyStream.md)
 
-Defined in: [properties/object.mjs:70](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/object.mjs#L70)
+Defined in: [properties/object.mjs:70](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/object.mjs#L70)
 
 ***
 
@@ -134,7 +134,7 @@ Defined in: [properties/object.mjs:70](https://github.com/auroris/SoulmaskCodec/
 
 > **hasTerminatorTrailer**: `boolean`
 
-Defined in: [properties/object.mjs:75](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/object.mjs#L75)
+Defined in: [properties/object.mjs:75](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/object.mjs#L75)
 
 ## Accessors
 
@@ -144,7 +144,7 @@ Defined in: [properties/object.mjs:75](https://github.com/auroris/SoulmaskCodec/
 
 > **get** **hasEmbedded**(): `boolean`
 
-Defined in: [properties/object.mjs:79](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/object.mjs#L79)
+Defined in: [properties/object.mjs:79](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/object.mjs#L79)
 
 True iff `embedded` is a non-null [PropertyStream](PropertyStream.md).
 
@@ -158,7 +158,7 @@ True iff `embedded` is a non-null [PropertyStream](PropertyStream.md).
 
 > `static` **fromReaderTopLevel**(`cursor`, `sizeHint`, `ctx?`): `ObjectRef`
 
-Defined in: [properties/object.mjs:91](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/object.mjs#L91)
+Defined in: [properties/object.mjs:91](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/object.mjs#L91)
 
 Top-level read: `sizeHint` is the tight per-property byte budget from
 the tag. The reader steps through kind / kindOnePrefix / path /
@@ -192,7 +192,7 @@ Decode context (e.g. `{ strict?: boolean }`).
 
 > `static` **fromReaderArrayElement**(`cursor`, `sizeHint`, `ctx?`): `ObjectRef`
 
-Defined in: [properties/object.mjs:169](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/object.mjs#L169)
+Defined in: [properties/object.mjs:169](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/object.mjs#L169)
 
 Array-element read. `sizeHint` here is the REMAINING array budget,
 not a per-element bound, because ArrayProperty<Object> has no per-
@@ -245,7 +245,7 @@ Decode context (e.g. `{ strict?: boolean }`).
 
 > **toBytes**(`writer`, `opts?`): `void`
 
-Defined in: [properties/object.mjs:306](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/object.mjs#L306)
+Defined in: [properties/object.mjs:306](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/object.mjs#L306)
 
 Emit the wire form that matches which fields were captured at read time
 (or set programmatically). The kind byte is always emitted; subsequent
@@ -279,7 +279,7 @@ Force emission of classPath even when it's null (used by container codecs that n
 
 > **toJSON**(): `any`
 
-Defined in: [properties/object.mjs:323](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/object.mjs#L323)
+Defined in: [properties/object.mjs:323](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/object.mjs#L323)
 
 #### Returns
 
@@ -291,7 +291,7 @@ Defined in: [properties/object.mjs:323](https://github.com/auroris/SoulmaskCodec
 
 > `static` **fromJSON**(`j`): `ObjectRef`
 
-Defined in: [properties/object.mjs:339](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/object.mjs#L339)
+Defined in: [properties/object.mjs:339](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/object.mjs#L339)
 
 #### Parameters
 

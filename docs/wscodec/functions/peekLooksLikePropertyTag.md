@@ -8,7 +8,7 @@
 
 > **peekLooksLikePropertyTag**(`cursor`): `boolean`
 
-Defined in: [property-stream.mjs:138](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property-stream.mjs#L138)
+Defined in: [property-stream.mjs:138](https://github.com/auroris/SoulmaskCodec/blob/main/src/property-stream.mjs#L138)
 
 Peek the next bytes of `cursor` (without advancing): do they look like
 the start of a PropertyTag (an FString that names a property)?

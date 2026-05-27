@@ -8,7 +8,7 @@
 
 > `const` **STRUCT\_HANDLERS**: `object`
 
-Defined in: [properties/struct.mjs:41](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/struct.mjs#L41)
+Defined in: [properties/struct.mjs:41](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/struct.mjs#L41)
 
 ## Type Declaration
 

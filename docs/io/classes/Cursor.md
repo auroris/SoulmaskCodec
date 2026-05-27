@@ -6,7 +6,7 @@
 
 # Class: Cursor
 
-Defined in: [io.mjs:30](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/io.mjs#L30)
+Defined in: [io.mjs:30](https://github.com/auroris/SoulmaskCodec/blob/main/src/io.mjs#L30)
 
 Forward-only reader over a Uint8Array. All multi-byte integers are
 little-endian. The cursor holds a direct DataView over the input bytes —
@@ -18,7 +18,7 @@ no copy — and advances `offset` on every read.
 
 > **new Cursor**(`bytes`, `offset?`): `Cursor`
 
-Defined in: [io.mjs:35](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/io.mjs#L35)
+Defined in: [io.mjs:35](https://github.com/auroris/SoulmaskCodec/blob/main/src/io.mjs#L35)
 
 #### Parameters
 
@@ -44,7 +44,7 @@ Starting absolute offset (default 0).
 
 > **bytes**: `Uint8Array`\<`ArrayBufferLike`\>
 
-Defined in: [io.mjs:36](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/io.mjs#L36)
+Defined in: [io.mjs:36](https://github.com/auroris/SoulmaskCodec/blob/main/src/io.mjs#L36)
 
 ***
 
@@ -52,7 +52,7 @@ Defined in: [io.mjs:36](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2
 
 > **dv**: `DataView`\<`ArrayBufferLike`\>
 
-Defined in: [io.mjs:37](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/io.mjs#L37)
+Defined in: [io.mjs:37](https://github.com/auroris/SoulmaskCodec/blob/main/src/io.mjs#L37)
 
 ***
 
@@ -60,7 +60,7 @@ Defined in: [io.mjs:37](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2
 
 > **offset**: `number`
 
-Defined in: [io.mjs:38](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/io.mjs#L38)
+Defined in: [io.mjs:38](https://github.com/auroris/SoulmaskCodec/blob/main/src/io.mjs#L38)
 
 ## Methods
 
@@ -68,7 +68,7 @@ Defined in: [io.mjs:38](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2
 
 > **pos**(): `number`
 
-Defined in: [io.mjs:41](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/io.mjs#L41)
+Defined in: [io.mjs:41](https://github.com/auroris/SoulmaskCodec/blob/main/src/io.mjs#L41)
 
 Current absolute offset within the buffer.
 
@@ -82,7 +82,7 @@ Current absolute offset within the buffer.
 
 > **eof**(): `boolean`
 
-Defined in: [io.mjs:43](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/io.mjs#L43)
+Defined in: [io.mjs:43](https://github.com/auroris/SoulmaskCodec/blob/main/src/io.mjs#L43)
 
 True iff the cursor is at or past the end of the buffer.
 
@@ -96,7 +96,7 @@ True iff the cursor is at or past the end of the buffer.
 
 > **remaining**(): `number`
 
-Defined in: [io.mjs:45](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/io.mjs#L45)
+Defined in: [io.mjs:45](https://github.com/auroris/SoulmaskCodec/blob/main/src/io.mjs#L45)
 
 Bytes remaining between the cursor and the end of the buffer.
 
@@ -110,7 +110,7 @@ Bytes remaining between the cursor and the end of the buffer.
 
 > **skip**(`n`): `void`
 
-Defined in: [io.mjs:55](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/io.mjs#L55)
+Defined in: [io.mjs:55](https://github.com/auroris/SoulmaskCodec/blob/main/src/io.mjs#L55)
 
 Advance the cursor by `n` bytes. Throws RangeError if `n` is negative or
 would take the cursor past the end of the buffer. Use `seek(n)` to jump
@@ -136,7 +136,7 @@ Non-negative number of bytes to skip.
 
 > **seek**(`n`): `void`
 
-Defined in: [io.mjs:73](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/io.mjs#L73)
+Defined in: [io.mjs:73](https://github.com/auroris/SoulmaskCodec/blob/main/src/io.mjs#L73)
 
 Move the cursor to absolute offset `n`. Throws RangeError if `n` is out
 of `[0, buffer.length]` (note: length is allowed; the cursor is then at
@@ -162,7 +162,7 @@ Absolute offset in `[0, buffer.length]`.
 
 > **readUint8**(): `number`
 
-Defined in: [io.mjs:80](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/io.mjs#L80)
+Defined in: [io.mjs:80](https://github.com/auroris/SoulmaskCodec/blob/main/src/io.mjs#L80)
 
 #### Returns
 
@@ -174,7 +174,7 @@ Defined in: [io.mjs:80](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2
 
 > **readInt8**(): `number`
 
-Defined in: [io.mjs:81](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/io.mjs#L81)
+Defined in: [io.mjs:81](https://github.com/auroris/SoulmaskCodec/blob/main/src/io.mjs#L81)
 
 #### Returns
 
@@ -186,7 +186,7 @@ Defined in: [io.mjs:81](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2
 
 > **readUint16**(): `number`
 
-Defined in: [io.mjs:82](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/io.mjs#L82)
+Defined in: [io.mjs:82](https://github.com/auroris/SoulmaskCodec/blob/main/src/io.mjs#L82)
 
 #### Returns
 
@@ -198,7 +198,7 @@ Defined in: [io.mjs:82](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2
 
 > **readInt16**(): `number`
 
-Defined in: [io.mjs:83](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/io.mjs#L83)
+Defined in: [io.mjs:83](https://github.com/auroris/SoulmaskCodec/blob/main/src/io.mjs#L83)
 
 #### Returns
 
@@ -210,7 +210,7 @@ Defined in: [io.mjs:83](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2
 
 > **readUint32**(): `number`
 
-Defined in: [io.mjs:84](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/io.mjs#L84)
+Defined in: [io.mjs:84](https://github.com/auroris/SoulmaskCodec/blob/main/src/io.mjs#L84)
 
 #### Returns
 
@@ -222,7 +222,7 @@ Defined in: [io.mjs:84](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2
 
 > **readInt32**(): `number`
 
-Defined in: [io.mjs:85](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/io.mjs#L85)
+Defined in: [io.mjs:85](https://github.com/auroris/SoulmaskCodec/blob/main/src/io.mjs#L85)
 
 #### Returns
 
@@ -234,7 +234,7 @@ Defined in: [io.mjs:85](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2
 
 > **readUint64**(): `bigint`
 
-Defined in: [io.mjs:86](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/io.mjs#L86)
+Defined in: [io.mjs:86](https://github.com/auroris/SoulmaskCodec/blob/main/src/io.mjs#L86)
 
 #### Returns
 
@@ -246,7 +246,7 @@ Defined in: [io.mjs:86](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2
 
 > **readInt64**(): `bigint`
 
-Defined in: [io.mjs:87](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/io.mjs#L87)
+Defined in: [io.mjs:87](https://github.com/auroris/SoulmaskCodec/blob/main/src/io.mjs#L87)
 
 #### Returns
 
@@ -258,7 +258,7 @@ Defined in: [io.mjs:87](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2
 
 > **readFloat32**(): `number`
 
-Defined in: [io.mjs:88](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/io.mjs#L88)
+Defined in: [io.mjs:88](https://github.com/auroris/SoulmaskCodec/blob/main/src/io.mjs#L88)
 
 #### Returns
 
@@ -270,7 +270,7 @@ Defined in: [io.mjs:88](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2
 
 > **readFloat64**(): `number`
 
-Defined in: [io.mjs:89](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/io.mjs#L89)
+Defined in: [io.mjs:89](https://github.com/auroris/SoulmaskCodec/blob/main/src/io.mjs#L89)
 
 #### Returns
 
@@ -282,7 +282,7 @@ Defined in: [io.mjs:89](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2
 
 > **peekInt32**(): `number`
 
-Defined in: [io.mjs:97](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/io.mjs#L97)
+Defined in: [io.mjs:97](https://github.com/auroris/SoulmaskCodec/blob/main/src/io.mjs#L97)
 
 Peek a 4-byte little-endian int32 at the current position without
 advancing the cursor. Used by ambiguity-resolving heuristics
@@ -299,7 +299,7 @@ need to look ahead before committing to a read.
 
 > **readBytes**(`n`): `Uint8Array`\<`ArrayBufferLike`\>
 
-Defined in: [io.mjs:109](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/io.mjs#L109)
+Defined in: [io.mjs:109](https://github.com/auroris/SoulmaskCodec/blob/main/src/io.mjs#L109)
 
 Read `n` bytes and return them as a Uint8Array VIEW over the underlying
 buffer (no copy). The returned subarray shares storage with this cursor's
@@ -327,7 +327,7 @@ Subarray view, length `n`.
 
 > **readFString**(): [`FStringRead`](../interfaces/FStringRead.md)
 
-Defined in: [io.mjs:127](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/io.mjs#L127)
+Defined in: [io.mjs:127](https://github.com/auroris/SoulmaskCodec/blob/main/src/io.mjs#L127)
 
 FString:  int32 SaveNum  (length in code units INCLUDING null terminator)
           SaveNum > 0 → ANSI;  SaveNum < 0 → UTF-16 LE;  SaveNum == 0 → empty.

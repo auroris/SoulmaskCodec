@@ -6,7 +6,7 @@
 
 # Class: UnrealBlob
 
-Defined in: [blob.mjs:60](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/blob.mjs#L60)
+Defined in: [blob.mjs:60](https://github.com/auroris/SoulmaskCodec/blob/main/src/blob.mjs#L60)
 
 Top-level codec object. Wraps a [PropertyStream](PropertyStream.md) plus the 4-byte
 version header and any trailing bytes after the terminator.
@@ -17,7 +17,7 @@ version header and any trailing bytes after the terminator.
 
 > **new UnrealBlob**(`opts?`): `UnrealBlob`
 
-Defined in: [blob.mjs:67](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/blob.mjs#L67)
+Defined in: [blob.mjs:67](https://github.com/auroris/SoulmaskCodec/blob/main/src/blob.mjs#L67)
 
 #### Parameters
 
@@ -49,7 +49,7 @@ Unparsed bytes after the terminator, if any.
 
 > **versionTag**: `number`
 
-Defined in: [blob.mjs:68](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/blob.mjs#L68)
+Defined in: [blob.mjs:68](https://github.com/auroris/SoulmaskCodec/blob/main/src/blob.mjs#L68)
 
 ***
 
@@ -57,7 +57,7 @@ Defined in: [blob.mjs:68](https://github.com/auroris/SoulmaskCodec/blob/01650b5a
 
 > **stream**: [`PropertyStream`](PropertyStream.md)
 
-Defined in: [blob.mjs:69](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/blob.mjs#L69)
+Defined in: [blob.mjs:69](https://github.com/auroris/SoulmaskCodec/blob/main/src/blob.mjs#L69)
 
 ***
 
@@ -65,7 +65,7 @@ Defined in: [blob.mjs:69](https://github.com/auroris/SoulmaskCodec/blob/01650b5a
 
 > **bodyTrailing**: `Uint8Array`\<`ArrayBufferLike`\>
 
-Defined in: [blob.mjs:70](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/blob.mjs#L70)
+Defined in: [blob.mjs:70](https://github.com/auroris/SoulmaskCodec/blob/main/src/blob.mjs#L70)
 
 ## Accessors
 
@@ -75,7 +75,7 @@ Defined in: [blob.mjs:70](https://github.com/auroris/SoulmaskCodec/blob/01650b5a
 
 > **get** **kind**(): `string`
 
-Defined in: [blob.mjs:74](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/blob.mjs#L74)
+Defined in: [blob.mjs:74](https://github.com/auroris/SoulmaskCodec/blob/main/src/blob.mjs#L74)
 
 Codec-adapter name. Matches the `name` field on the bare `codec` export.
 
@@ -91,7 +91,7 @@ Codec-adapter name. Matches the `name` field on the bare `codec` export.
 
 > **get** **properties**(): [`Property`](Property.md)[]
 
-Defined in: [blob.mjs:81](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/blob.mjs#L81)
+Defined in: [blob.mjs:81](https://github.com/auroris/SoulmaskCodec/blob/main/src/blob.mjs#L81)
 
 Convenience accessor for the top-level property list. Equivalent to
 `this.stream.properties` — exposes the canonical place to add/remove
@@ -109,7 +109,7 @@ properties at the top level.
 
 > **get** **terminated**(): `boolean`
 
-Defined in: [blob.mjs:84](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/blob.mjs#L84)
+Defined in: [blob.mjs:84](https://github.com/auroris/SoulmaskCodec/blob/main/src/blob.mjs#L84)
 
 True iff the property stream was successfully terminated by a None tag.
 
@@ -123,7 +123,7 @@ True iff the property stream was successfully terminated by a None tag.
 
 > **findProperty**(`propName`): [`Property`](Property.md)
 
-Defined in: [blob.mjs:94](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/blob.mjs#L94)
+Defined in: [blob.mjs:94](https://github.com/auroris/SoulmaskCodec/blob/main/src/blob.mjs#L94)
 
 First TOP-LEVEL property with the given tag name, or null. Does NOT
 traverse into embedded streams, struct values, array elements, or map
@@ -145,7 +145,7 @@ entries — use `findPropertyDeep` for that.
 
 > **findPropertyDeep**(`propName`): [`Property`](Property.md)
 
-Defined in: [blob.mjs:113](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/blob.mjs#L113)
+Defined in: [blob.mjs:113](https://github.com/auroris/SoulmaskCodec/blob/main/src/blob.mjs#L113)
 
 Depth-first search for the first property with the given tag name,
 anywhere in the tree. Walks:
@@ -171,7 +171,7 @@ anywhere in the tree. Walks:
 
 > `static` **detect**(`u8`): `boolean`
 
-Defined in: [blob.mjs:124](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/blob.mjs#L124)
+Defined in: [blob.mjs:124](https://github.com/auroris/SoulmaskCodec/blob/main/src/blob.mjs#L124)
 
 True iff `u8` starts with the wscodec wire header. Cheap header sniff;
 doesn't validate the rest of the structure.
@@ -192,7 +192,7 @@ doesn't validate the rest of the structure.
 
 > `static` **fromBytes**(`u8`, `opts?`): `UnrealBlob`
 
-Defined in: [blob.mjs:143](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/blob.mjs#L143)
+Defined in: [blob.mjs:143](https://github.com/auroris/SoulmaskCodec/blob/main/src/blob.mjs#L143)
 
 Parse uncompressed property-stream bytes. Always throws on size
 mismatch (codec bug) or any other structural failure; the
@@ -226,7 +226,7 @@ on header mismatch or structural failure.
 
 > **toBytes**(): `Uint8Array`\<`ArrayBufferLike`\>
 
-Defined in: [blob.mjs:175](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/blob.mjs#L175)
+Defined in: [blob.mjs:175](https://github.com/auroris/SoulmaskCodec/blob/main/src/blob.mjs#L175)
 
 Re-encode this blob to bytes. Always recomputes every tag size from
 actually-encoded value bytes; there is no pass-through path.
@@ -241,7 +241,7 @@ actually-encoded value bytes; there is no pass-through path.
 
 > **toJSON**(): `any`
 
-Defined in: [blob.mjs:190](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/blob.mjs#L190)
+Defined in: [blob.mjs:190](https://github.com/auroris/SoulmaskCodec/blob/main/src/blob.mjs#L190)
 
 Build a JSON-safe tree. `bodyTrailing` is base64-encoded.
 
@@ -255,7 +255,7 @@ Build a JSON-safe tree. `bodyTrailing` is base64-encoded.
 
 > `static` **fromJSON**(`j`): `UnrealBlob`
 
-Defined in: [blob.mjs:205](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/blob.mjs#L205)
+Defined in: [blob.mjs:205](https://github.com/auroris/SoulmaskCodec/blob/main/src/blob.mjs#L205)
 
 #### Parameters
 
@@ -273,7 +273,7 @@ Defined in: [blob.mjs:205](https://github.com/auroris/SoulmaskCodec/blob/01650b5
 
 > **toJSONString**(`indent?`): `string`
 
-Defined in: [blob.mjs:219](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/blob.mjs#L219)
+Defined in: [blob.mjs:219](https://github.com/auroris/SoulmaskCodec/blob/main/src/blob.mjs#L219)
 
 Stringify with -0 / NaN / Infinity preserved via sentinel substitution.
 
@@ -295,7 +295,7 @@ Passed through to `JSON.stringify`.
 
 > `static` **fromJSONString**(`s`): `UnrealBlob`
 
-Defined in: [blob.mjs:227](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/blob.mjs#L227)
+Defined in: [blob.mjs:227](https://github.com/auroris/SoulmaskCodec/blob/main/src/blob.mjs#L227)
 
 Parse + reconstruct, undoing the sentinel substitution.
 

@@ -6,7 +6,7 @@
 
 # Class: PropertyTag
 
-Defined in: [tag.mjs:74](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/tag.mjs#L74)
+Defined in: [tag.mjs:74](https://github.com/auroris/SoulmaskCodec/blob/main/src/tag.mjs#L74)
 
 Header preceding each property's value bytes. Carries the property's
 name, type, byte size, and any per-type extension fields (struct name,
@@ -22,7 +22,7 @@ normal use is through [PropertyTag.fromReader](#fromreader) or
 
 > **new PropertyTag**(`fields?`): `PropertyTag`
 
-Defined in: [tag.mjs:90](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/tag.mjs#L90)
+Defined in: [tag.mjs:90](https://github.com/auroris/SoulmaskCodec/blob/main/src/tag.mjs#L90)
 
 #### Parameters
 
@@ -86,7 +86,7 @@ Defined in: [tag.mjs:90](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab
 
 > **name**: [`FName`](../../primitives/classes/FName.md)
 
-Defined in: [tag.mjs:91](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/tag.mjs#L91)
+Defined in: [tag.mjs:91](https://github.com/auroris/SoulmaskCodec/blob/main/src/tag.mjs#L91)
 
 ***
 
@@ -94,7 +94,7 @@ Defined in: [tag.mjs:91](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab
 
 > **type**: [`FName`](../../primitives/classes/FName.md)
 
-Defined in: [tag.mjs:92](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/tag.mjs#L92)
+Defined in: [tag.mjs:92](https://github.com/auroris/SoulmaskCodec/blob/main/src/tag.mjs#L92)
 
 ***
 
@@ -102,7 +102,7 @@ Defined in: [tag.mjs:92](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab
 
 > **arrayIndex**: `number`
 
-Defined in: [tag.mjs:93](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/tag.mjs#L93)
+Defined in: [tag.mjs:93](https://github.com/auroris/SoulmaskCodec/blob/main/src/tag.mjs#L93)
 
 ***
 
@@ -110,7 +110,7 @@ Defined in: [tag.mjs:93](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab
 
 > **structName**: [`FName`](../../primitives/classes/FName.md)
 
-Defined in: [tag.mjs:94](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/tag.mjs#L94)
+Defined in: [tag.mjs:94](https://github.com/auroris/SoulmaskCodec/blob/main/src/tag.mjs#L94)
 
 ***
 
@@ -118,7 +118,7 @@ Defined in: [tag.mjs:94](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab
 
 > **structGuid**: [`FGuid`](../../primitives/classes/FGuid.md)
 
-Defined in: [tag.mjs:95](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/tag.mjs#L95)
+Defined in: [tag.mjs:95](https://github.com/auroris/SoulmaskCodec/blob/main/src/tag.mjs#L95)
 
 ***
 
@@ -126,7 +126,7 @@ Defined in: [tag.mjs:95](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab
 
 > **boolVal**: `number`
 
-Defined in: [tag.mjs:96](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/tag.mjs#L96)
+Defined in: [tag.mjs:96](https://github.com/auroris/SoulmaskCodec/blob/main/src/tag.mjs#L96)
 
 ***
 
@@ -134,7 +134,7 @@ Defined in: [tag.mjs:96](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab
 
 > **enumName**: [`FName`](../../primitives/classes/FName.md)
 
-Defined in: [tag.mjs:97](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/tag.mjs#L97)
+Defined in: [tag.mjs:97](https://github.com/auroris/SoulmaskCodec/blob/main/src/tag.mjs#L97)
 
 ***
 
@@ -142,7 +142,7 @@ Defined in: [tag.mjs:97](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab
 
 > **innerType**: [`FName`](../../primitives/classes/FName.md)
 
-Defined in: [tag.mjs:98](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/tag.mjs#L98)
+Defined in: [tag.mjs:98](https://github.com/auroris/SoulmaskCodec/blob/main/src/tag.mjs#L98)
 
 ***
 
@@ -150,7 +150,7 @@ Defined in: [tag.mjs:98](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab
 
 > **valueType**: [`FName`](../../primitives/classes/FName.md)
 
-Defined in: [tag.mjs:99](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/tag.mjs#L99)
+Defined in: [tag.mjs:99](https://github.com/auroris/SoulmaskCodec/blob/main/src/tag.mjs#L99)
 
 ***
 
@@ -158,7 +158,7 @@ Defined in: [tag.mjs:99](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab
 
 > **hasPropertyGuid**: `boolean`
 
-Defined in: [tag.mjs:100](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/tag.mjs#L100)
+Defined in: [tag.mjs:100](https://github.com/auroris/SoulmaskCodec/blob/main/src/tag.mjs#L100)
 
 ***
 
@@ -166,7 +166,7 @@ Defined in: [tag.mjs:100](https://github.com/auroris/SoulmaskCodec/blob/01650b5a
 
 > **propertyGuid**: [`FGuid`](../../primitives/classes/FGuid.md)
 
-Defined in: [tag.mjs:101](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/tag.mjs#L101)
+Defined in: [tag.mjs:101](https://github.com/auroris/SoulmaskCodec/blob/main/src/tag.mjs#L101)
 
 ***
 
@@ -174,7 +174,7 @@ Defined in: [tag.mjs:101](https://github.com/auroris/SoulmaskCodec/blob/01650b5a
 
 > **isTerminator**: `boolean`
 
-Defined in: [tag.mjs:102](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/tag.mjs#L102)
+Defined in: [tag.mjs:102](https://github.com/auroris/SoulmaskCodec/blob/main/src/tag.mjs#L102)
 
 ## Methods
 
@@ -182,7 +182,7 @@ Defined in: [tag.mjs:102](https://github.com/auroris/SoulmaskCodec/blob/01650b5a
 
 > `static` **fromReader**(`cursor`): `PropertyTag`
 
-Defined in: [tag.mjs:113](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/tag.mjs#L113)
+Defined in: [tag.mjs:113](https://github.com/auroris/SoulmaskCodec/blob/main/src/tag.mjs#L113)
 
 Read a PropertyTag from the cursor. The wire `size` field is captured
 in `tag._readSize` (transient — used by Property.fromReader as the
@@ -204,7 +204,7 @@ value-decoding byte budget, then discarded).
 
 > **toBytes**(`writer`): `number`
 
-Defined in: [tag.mjs:144](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/tag.mjs#L144)
+Defined in: [tag.mjs:144](https://github.com/auroris/SoulmaskCodec/blob/main/src/tag.mjs#L144)
 
 Emit the tag bytes with a zero placeholder for the `size` field, and
 return the absolute writer offset of that placeholder so the caller
@@ -235,7 +235,7 @@ Absolute writer offset of the size placeholder, or -1 for terminator tags.
 
 > **toJSON**(): `any`
 
-Defined in: [tag.mjs:164](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/tag.mjs#L164)
+Defined in: [tag.mjs:164](https://github.com/auroris/SoulmaskCodec/blob/main/src/tag.mjs#L164)
 
 Flat JSON shape: tag fields and the relevant TAG_EXTRAS entries are
 spread into a single object so it merges cleanly with the per-property
@@ -251,7 +251,7 @@ value JSON. Inverse of [PropertyTag.fromJSON](#fromjson).
 
 > `static` **fromJSON**(`j`): `PropertyTag`
 
-Defined in: [tag.mjs:181](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/tag.mjs#L181)
+Defined in: [tag.mjs:181](https://github.com/auroris/SoulmaskCodec/blob/main/src/tag.mjs#L181)
 
 Reconstruct a PropertyTag from the JSON shape produced by `toJSON`.
 

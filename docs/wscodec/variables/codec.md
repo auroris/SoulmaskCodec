@@ -8,7 +8,7 @@
 
 > `const` **codec**: `object`
 
-Defined in: [blob.mjs:235](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/blob.mjs#L235)
+Defined in: [blob.mjs:235](https://github.com/auroris/SoulmaskCodec/blob/main/src/blob.mjs#L235)
 
 wscodec: pure-JS codec for Soulmask actor_data property streams.
 

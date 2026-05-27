@@ -6,7 +6,7 @@
 
 # Class: EnumProperty
 
-Defined in: [properties/leaf.mjs:181](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/leaf.mjs#L181)
+Defined in: [properties/leaf.mjs:181](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/leaf.mjs#L181)
 
 FName-valued enum property; the enum type lives on `tag.enumName`.
 
@@ -20,7 +20,7 @@ FName-valued enum property; the enum type lives on `tag.enumName`.
 
 > **new EnumProperty**(`opts?`): `EnumProperty`
 
-Defined in: [properties/leaf.mjs:168](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/leaf.mjs#L168)
+Defined in: [properties/leaf.mjs:168](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/leaf.mjs#L168)
 
 #### Parameters
 
@@ -48,11 +48,11 @@ Defined in: [properties/leaf.mjs:168](https://github.com/auroris/SoulmaskCodec/b
 
 > **value**: `string` \| [`FName`](../../primitives/classes/FName.md)
 
-Defined in: [properties/leaf.mjs:170](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/leaf.mjs#L170)
+Defined in: [properties/leaf.mjs:170](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/leaf.mjs#L170)
 
 #### Inherited from
 
-`_FNameLeaf.value`
+[`NameProperty`](NameProperty.md).[`value`](NameProperty.md#value)
 
 ***
 
@@ -60,7 +60,7 @@ Defined in: [properties/leaf.mjs:170](https://github.com/auroris/SoulmaskCodec/b
 
 > **tag**: [`PropertyTag`](PropertyTag.md)
 
-Defined in: [property.mjs:100](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property.mjs#L100)
+Defined in: [property.mjs:100](https://github.com/auroris/SoulmaskCodec/blob/main/src/property.mjs#L100)
 
 #### Inherited from
 
@@ -74,7 +74,7 @@ Defined in: [property.mjs:100](https://github.com/auroris/SoulmaskCodec/blob/016
 
 > **get** **name**(): `string`
 
-Defined in: [property.mjs:104](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property.mjs#L104)
+Defined in: [property.mjs:104](https://github.com/auroris/SoulmaskCodec/blob/main/src/property.mjs#L104)
 
 Property name (`tag.name.value`), or null for a tag-less / synthetic property.
 
@@ -94,7 +94,7 @@ Property name (`tag.name.value`), or null for a tag-less / synthetic property.
 
 > **get** **type**(): `string`
 
-Defined in: [property.mjs:106](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property.mjs#L106)
+Defined in: [property.mjs:106](https://github.com/auroris/SoulmaskCodec/blob/main/src/property.mjs#L106)
 
 Property UE type (`tag.type.value`), or null.
 
@@ -112,7 +112,7 @@ Property UE type (`tag.type.value`), or null.
 
 > `static` **fromReader**(`cursor`, `tag`): `_FNameLeaf`
 
-Defined in: [properties/leaf.mjs:172](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/leaf.mjs#L172)
+Defined in: [properties/leaf.mjs:172](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/leaf.mjs#L172)
 
 Read one property: tag + value. Throws on size mismatch (the value
 reader consumed a different number of bytes than the tag claimed —
@@ -150,7 +150,7 @@ on size mismatch or missing opaque fallback.
 
 > **\_writeValue**(`w`): `void`
 
-Defined in: [properties/leaf.mjs:173](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/leaf.mjs#L173)
+Defined in: [properties/leaf.mjs:173](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/leaf.mjs#L173)
 
 Write the property's value bytes only — the tag has already been
 emitted by `toBytes`. Subclasses must override.
@@ -179,7 +179,7 @@ on the base class (unimplemented).
 
 > **\_writeJSON**(`j`): `void`
 
-Defined in: [properties/leaf.mjs:174](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/leaf.mjs#L174)
+Defined in: [properties/leaf.mjs:174](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/leaf.mjs#L174)
 
 Add this property's value fields to the JSON object already populated
 with tag fields. Subclasses must override.
@@ -208,7 +208,7 @@ on the base class (unimplemented).
 
 > `static` **fromJSON**(`j`): `_FNameLeaf`
 
-Defined in: [properties/leaf.mjs:175](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/leaf.mjs#L175)
+Defined in: [properties/leaf.mjs:175](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/leaf.mjs#L175)
 
 Reconstruct a Property from its JSON form. Dispatches on `j.type`;
 unknown types fall through to the opaque fallback.
@@ -237,7 +237,7 @@ when no handler and no opaque fallback are registered.
 
 > **toBytes**(`writer`, `ctx?`): `void`
 
-Defined in: [property.mjs:154](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property.mjs#L154)
+Defined in: [property.mjs:154](https://github.com/auroris/SoulmaskCodec/blob/main/src/property.mjs#L154)
 
 Encode the property to the writer in a single forward pass: emit the
 tag (with a placeholder size), write the value bytes directly into
@@ -270,7 +270,7 @@ Encode context (reserved for future use).
 
 > **toJSON**(): `any`
 
-Defined in: [property.mjs:179](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property.mjs#L179)
+Defined in: [property.mjs:179](https://github.com/auroris/SoulmaskCodec/blob/main/src/property.mjs#L179)
 
 Flat JSON shape: tag fields + value fields merged into one object via
 the subclass's `_writeJSON`. Inverse of `Property.fromJSON`.

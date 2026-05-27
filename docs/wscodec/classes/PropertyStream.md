@@ -6,7 +6,7 @@
 
 # Class: PropertyStream
 
-Defined in: [property-stream.mjs:29](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property-stream.mjs#L29)
+Defined in: [property-stream.mjs:29](https://github.com/auroris/SoulmaskCodec/blob/main/src/property-stream.mjs#L29)
 
 Ordered list of properties terminated by a `None` tag. The recursive unit
 of the codec: appears at the top level of an UnrealBlob, inside
@@ -19,7 +19,7 @@ array/set/map struct elements.
 
 > **new PropertyStream**(`opts?`): `PropertyStream`
 
-Defined in: [property-stream.mjs:36](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property-stream.mjs#L36)
+Defined in: [property-stream.mjs:36](https://github.com/auroris/SoulmaskCodec/blob/main/src/property-stream.mjs#L36)
 
 #### Parameters
 
@@ -51,7 +51,7 @@ True iff a 4-byte FName.Number=0 trailer followed the `None`.
 
 > **properties**: [`Property`](Property.md)[]
 
-Defined in: [property-stream.mjs:37](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property-stream.mjs#L37)
+Defined in: [property-stream.mjs:37](https://github.com/auroris/SoulmaskCodec/blob/main/src/property-stream.mjs#L37)
 
 ***
 
@@ -59,7 +59,7 @@ Defined in: [property-stream.mjs:37](https://github.com/auroris/SoulmaskCodec/bl
 
 > **terminated**: `boolean`
 
-Defined in: [property-stream.mjs:38](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property-stream.mjs#L38)
+Defined in: [property-stream.mjs:38](https://github.com/auroris/SoulmaskCodec/blob/main/src/property-stream.mjs#L38)
 
 ***
 
@@ -67,7 +67,7 @@ Defined in: [property-stream.mjs:38](https://github.com/auroris/SoulmaskCodec/bl
 
 > **terminatorTrailer**: `boolean`
 
-Defined in: [property-stream.mjs:39](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property-stream.mjs#L39)
+Defined in: [property-stream.mjs:39](https://github.com/auroris/SoulmaskCodec/blob/main/src/property-stream.mjs#L39)
 
 ## Methods
 
@@ -75,7 +75,7 @@ Defined in: [property-stream.mjs:39](https://github.com/auroris/SoulmaskCodec/bl
 
 > `static` **fromReader**(`cursor`, `endOffset?`, `opts?`): `PropertyStream`
 
-Defined in: [property-stream.mjs:57](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property-stream.mjs#L57)
+Defined in: [property-stream.mjs:57](https://github.com/auroris/SoulmaskCodec/blob/main/src/property-stream.mjs#L57)
 
 Read properties until either a None terminator or `endOffset` is reached.
 
@@ -118,7 +118,7 @@ Decode context (e.g. `{ strict?: boolean }`).
 
 > **toBytes**(`writer`, `opts?`): `void`
 
-Defined in: [property-stream.mjs:86](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property-stream.mjs#L86)
+Defined in: [property-stream.mjs:86](https://github.com/auroris/SoulmaskCodec/blob/main/src/property-stream.mjs#L86)
 
 Write the properties, then a None terminator. The trailer (4-byte
 FName.Number=0) is emitted when `this.terminatorTrailer` is true OR
@@ -150,7 +150,7 @@ the caller passes `emitTerminatorTrailer: true` (top-level stream).
 
 > **toJSON**(): `any`
 
-Defined in: [property-stream.mjs:95](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property-stream.mjs#L95)
+Defined in: [property-stream.mjs:95](https://github.com/auroris/SoulmaskCodec/blob/main/src/property-stream.mjs#L95)
 
 #### Returns
 
@@ -162,7 +162,7 @@ Defined in: [property-stream.mjs:95](https://github.com/auroris/SoulmaskCodec/bl
 
 > `static` **fromJSON**(`j`): `PropertyStream`
 
-Defined in: [property-stream.mjs:106](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property-stream.mjs#L106)
+Defined in: [property-stream.mjs:106](https://github.com/auroris/SoulmaskCodec/blob/main/src/property-stream.mjs#L106)
 
 #### Parameters
 

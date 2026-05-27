@@ -8,7 +8,7 @@
 
 > **translate**(`key`, `kind?`): `string`
 
-Defined in: [translations.mjs:135](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/translations.mjs#L135)
+Defined in: [translations.mjs:135](https://github.com/auroris/SoulmaskCodec/blob/main/src/translations.mjs#L135)
 
 Resolve a key to a display name.
 

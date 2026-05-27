@@ -6,7 +6,7 @@
 
 # Class: Property
 
-Defined in: [property.mjs:94](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property.mjs#L94)
+Defined in: [property.mjs:94](https://github.com/auroris/SoulmaskCodec/blob/main/src/property.mjs#L94)
 
 Base class for every UE property type. The base implements the common
 "read tag, dispatch to subclass, validate byte count" decode flow and the
@@ -33,7 +33,7 @@ Base class for every UE property type. The base implements the common
 
 > **new Property**(`opts?`): `Property`
 
-Defined in: [property.mjs:99](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property.mjs#L99)
+Defined in: [property.mjs:99](https://github.com/auroris/SoulmaskCodec/blob/main/src/property.mjs#L99)
 
 #### Parameters
 
@@ -53,7 +53,7 @@ Defined in: [property.mjs:99](https://github.com/auroris/SoulmaskCodec/blob/0165
 
 > **tag**: [`PropertyTag`](PropertyTag.md)
 
-Defined in: [property.mjs:100](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property.mjs#L100)
+Defined in: [property.mjs:100](https://github.com/auroris/SoulmaskCodec/blob/main/src/property.mjs#L100)
 
 ## Accessors
 
@@ -63,7 +63,7 @@ Defined in: [property.mjs:100](https://github.com/auroris/SoulmaskCodec/blob/016
 
 > **get** **name**(): `string`
 
-Defined in: [property.mjs:104](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property.mjs#L104)
+Defined in: [property.mjs:104](https://github.com/auroris/SoulmaskCodec/blob/main/src/property.mjs#L104)
 
 Property name (`tag.name.value`), or null for a tag-less / synthetic property.
 
@@ -79,7 +79,7 @@ Property name (`tag.name.value`), or null for a tag-less / synthetic property.
 
 > **get** **type**(): `string`
 
-Defined in: [property.mjs:106](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property.mjs#L106)
+Defined in: [property.mjs:106](https://github.com/auroris/SoulmaskCodec/blob/main/src/property.mjs#L106)
 
 Property UE type (`tag.type.value`), or null.
 
@@ -93,7 +93,7 @@ Property UE type (`tag.type.value`), or null.
 
 > `static` **fromReader**(`cursor`, `ctx?`): `Property`
 
-Defined in: [property.mjs:122](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property.mjs#L122)
+Defined in: [property.mjs:122](https://github.com/auroris/SoulmaskCodec/blob/main/src/property.mjs#L122)
 
 Read one property: tag + value. Throws on size mismatch (the value
 reader consumed a different number of bytes than the tag claimed —
@@ -129,7 +129,7 @@ on size mismatch or missing opaque fallback.
 
 > **toBytes**(`writer`, `ctx?`): `void`
 
-Defined in: [property.mjs:154](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property.mjs#L154)
+Defined in: [property.mjs:154](https://github.com/auroris/SoulmaskCodec/blob/main/src/property.mjs#L154)
 
 Encode the property to the writer in a single forward pass: emit the
 tag (with a placeholder size), write the value bytes directly into
@@ -158,7 +158,7 @@ Encode context (reserved for future use).
 
 > **\_writeValue**(`_writer`, `_ctx?`): `void`
 
-Defined in: [property.mjs:169](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property.mjs#L169)
+Defined in: [property.mjs:169](https://github.com/auroris/SoulmaskCodec/blob/main/src/property.mjs#L169)
 
 Write the property's value bytes only — the tag has already been
 emitted by `toBytes`. Subclasses must override.
@@ -187,7 +187,7 @@ on the base class (unimplemented).
 
 > **toJSON**(): `any`
 
-Defined in: [property.mjs:179](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property.mjs#L179)
+Defined in: [property.mjs:179](https://github.com/auroris/SoulmaskCodec/blob/main/src/property.mjs#L179)
 
 Flat JSON shape: tag fields + value fields merged into one object via
 the subclass's `_writeJSON`. Inverse of `Property.fromJSON`.
@@ -202,7 +202,7 @@ the subclass's `_writeJSON`. Inverse of `Property.fromJSON`.
 
 > **\_writeJSON**(`_j`): `void`
 
-Defined in: [property.mjs:196](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property.mjs#L196)
+Defined in: [property.mjs:196](https://github.com/auroris/SoulmaskCodec/blob/main/src/property.mjs#L196)
 
 Add this property's value fields to the JSON object already populated
 with tag fields. Subclasses must override.
@@ -227,7 +227,7 @@ on the base class (unimplemented).
 
 > `static` **fromJSON**(`j`): `Property`
 
-Defined in: [property.mjs:208](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property.mjs#L208)
+Defined in: [property.mjs:208](https://github.com/auroris/SoulmaskCodec/blob/main/src/property.mjs#L208)
 
 Reconstruct a Property from its JSON form. Dispatches on `j.type`;
 unknown types fall through to the opaque fallback.

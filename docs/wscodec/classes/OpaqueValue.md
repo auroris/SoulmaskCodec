@@ -6,7 +6,7 @@
 
 # Class: OpaqueValue
 
-Defined in: [properties/opaque.mjs:26](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/opaque.mjs#L26)
+Defined in: [properties/opaque.mjs:26](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/opaque.mjs#L26)
 
 Sub-value opaque carrier: bytes captured inside a container (array element,
 map value, struct field, text body) whose own decode failed while the
@@ -18,7 +18,7 @@ surrounding shape stayed intact.
 
 > **new OpaqueValue**(`opts?`): `OpaqueValue`
 
-Defined in: [properties/opaque.mjs:32](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/opaque.mjs#L32)
+Defined in: [properties/opaque.mjs:32](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/opaque.mjs#L32)
 
 #### Parameters
 
@@ -44,7 +44,7 @@ Free-form decode-failure reason for diagnostics.
 
 > **bytes**: `Uint8Array`\<`ArrayBufferLike`\>
 
-Defined in: [properties/opaque.mjs:33](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/opaque.mjs#L33)
+Defined in: [properties/opaque.mjs:33](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/opaque.mjs#L33)
 
 ***
 
@@ -52,7 +52,7 @@ Defined in: [properties/opaque.mjs:33](https://github.com/auroris/SoulmaskCodec/
 
 > **reason**: `string`
 
-Defined in: [properties/opaque.mjs:34](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/opaque.mjs#L34)
+Defined in: [properties/opaque.mjs:34](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/opaque.mjs#L34)
 
 ## Methods
 
@@ -60,7 +60,7 @@ Defined in: [properties/opaque.mjs:34](https://github.com/auroris/SoulmaskCodec/
 
 > `static` **fromReader**(`cursor`, `sizeHint`, `reason?`): `OpaqueValue`
 
-Defined in: [properties/opaque.mjs:47](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/opaque.mjs#L47)
+Defined in: [properties/opaque.mjs:47](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/opaque.mjs#L47)
 
 Capture `sizeHint` bytes from `cursor` as opaque. The caller is
 responsible for calling `warnOrThrow(ctx, ...)` first; this constructor
@@ -92,7 +92,7 @@ Byte count to consume.
 
 > **toBytes**(`writer`): `void`
 
-Defined in: [properties/opaque.mjs:53](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/opaque.mjs#L53)
+Defined in: [properties/opaque.mjs:53](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/opaque.mjs#L53)
 
 #### Parameters
 
@@ -110,7 +110,7 @@ Defined in: [properties/opaque.mjs:53](https://github.com/auroris/SoulmaskCodec/
 
 > **toJSON**(): `object`
 
-Defined in: [properties/opaque.mjs:57](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/opaque.mjs#L57)
+Defined in: [properties/opaque.mjs:57](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/opaque.mjs#L57)
 
 #### Returns
 
@@ -134,7 +134,7 @@ Defined in: [properties/opaque.mjs:57](https://github.com/auroris/SoulmaskCodec/
 
 > `static` **fromJSON**(`j`): `OpaqueValue`
 
-Defined in: [properties/opaque.mjs:65](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/opaque.mjs#L65)
+Defined in: [properties/opaque.mjs:65](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/opaque.mjs#L65)
 
 #### Parameters
 
@@ -158,7 +158,7 @@ Defined in: [properties/opaque.mjs:65](https://github.com/auroris/SoulmaskCodec/
 
 > `static` **isOpaqueJSON**(`j`): `boolean`
 
-Defined in: [properties/opaque.mjs:75](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/opaque.mjs#L75)
+Defined in: [properties/opaque.mjs:75](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/opaque.mjs#L75)
 
 Type guard: true iff `j` is the JSON shape produced by `toJSON`.
 

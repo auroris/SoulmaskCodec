@@ -5,7 +5,10 @@
     "moduleResolution": "NodeNext",
     "allowJs": true,
     "checkJs": false,
-    "noEmit": true,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "rootDir": "./src",
+    "outDir": "./dist/types",
     "skipLibCheck": true,
     "strict": false
   },

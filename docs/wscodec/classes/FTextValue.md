@@ -6,7 +6,7 @@
 
 # Class: FTextValue
 
-Defined in: [properties/text.mjs:70](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/text.mjs#L70)
+Defined in: [properties/text.mjs:70](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/text.mjs#L70)
 
 Decoded FText. The active fields depend on `historyType`:
 
@@ -24,7 +24,7 @@ Decoded FText. The active fields depend on `historyType`:
 
 > **new FTextValue**(`opts?`): `FTextValue`
 
-Defined in: [properties/text.mjs:94](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/text.mjs#L94)
+Defined in: [properties/text.mjs:94](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/text.mjs#L94)
 
 #### Parameters
 
@@ -128,7 +128,7 @@ Defined in: [properties/text.mjs:94](https://github.com/auroris/SoulmaskCodec/bl
 
 > **flags**: `number`
 
-Defined in: [properties/text.mjs:105](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/text.mjs#L105)
+Defined in: [properties/text.mjs:105](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/text.mjs#L105)
 
 ***
 
@@ -136,7 +136,7 @@ Defined in: [properties/text.mjs:105](https://github.com/auroris/SoulmaskCodec/b
 
 > **historyType**: `number`
 
-Defined in: [properties/text.mjs:106](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/text.mjs#L106)
+Defined in: [properties/text.mjs:106](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/text.mjs#L106)
 
 ***
 
@@ -144,7 +144,7 @@ Defined in: [properties/text.mjs:106](https://github.com/auroris/SoulmaskCodec/b
 
 > **displayString**: `string`
 
-Defined in: [properties/text.mjs:108](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/text.mjs#L108)
+Defined in: [properties/text.mjs:108](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/text.mjs#L108)
 
 ***
 
@@ -152,7 +152,7 @@ Defined in: [properties/text.mjs:108](https://github.com/auroris/SoulmaskCodec/b
 
 > **displayStringIsNull**: `boolean`
 
-Defined in: [properties/text.mjs:109](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/text.mjs#L109)
+Defined in: [properties/text.mjs:109](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/text.mjs#L109)
 
 ***
 
@@ -160,7 +160,7 @@ Defined in: [properties/text.mjs:109](https://github.com/auroris/SoulmaskCodec/b
 
 > **namespace**: `string`
 
-Defined in: [properties/text.mjs:111](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/text.mjs#L111)
+Defined in: [properties/text.mjs:111](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/text.mjs#L111)
 
 ***
 
@@ -168,7 +168,7 @@ Defined in: [properties/text.mjs:111](https://github.com/auroris/SoulmaskCodec/b
 
 > **namespaceIsNull**: `boolean`
 
-Defined in: [properties/text.mjs:112](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/text.mjs#L112)
+Defined in: [properties/text.mjs:112](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/text.mjs#L112)
 
 ***
 
@@ -176,7 +176,7 @@ Defined in: [properties/text.mjs:112](https://github.com/auroris/SoulmaskCodec/b
 
 > **key**: `string`
 
-Defined in: [properties/text.mjs:113](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/text.mjs#L113)
+Defined in: [properties/text.mjs:113](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/text.mjs#L113)
 
 ***
 
@@ -184,7 +184,7 @@ Defined in: [properties/text.mjs:113](https://github.com/auroris/SoulmaskCodec/b
 
 > **keyIsNull**: `boolean`
 
-Defined in: [properties/text.mjs:114](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/text.mjs#L114)
+Defined in: [properties/text.mjs:114](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/text.mjs#L114)
 
 ***
 
@@ -192,7 +192,7 @@ Defined in: [properties/text.mjs:114](https://github.com/auroris/SoulmaskCodec/b
 
 > **sourceString**: `string`
 
-Defined in: [properties/text.mjs:115](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/text.mjs#L115)
+Defined in: [properties/text.mjs:115](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/text.mjs#L115)
 
 ***
 
@@ -200,7 +200,7 @@ Defined in: [properties/text.mjs:115](https://github.com/auroris/SoulmaskCodec/b
 
 > **sourceStringIsNull**: `boolean`
 
-Defined in: [properties/text.mjs:116](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/text.mjs#L116)
+Defined in: [properties/text.mjs:116](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/text.mjs#L116)
 
 ***
 
@@ -208,7 +208,7 @@ Defined in: [properties/text.mjs:116](https://github.com/auroris/SoulmaskCodec/b
 
 > **sourceFmt**: `FTextValue`
 
-Defined in: [properties/text.mjs:118](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/text.mjs#L118)
+Defined in: [properties/text.mjs:118](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/text.mjs#L118)
 
 ***
 
@@ -216,7 +216,7 @@ Defined in: [properties/text.mjs:118](https://github.com/auroris/SoulmaskCodec/b
 
 > **arguments**: `any`[]
 
-Defined in: [properties/text.mjs:119](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/text.mjs#L119)
+Defined in: [properties/text.mjs:119](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/text.mjs#L119)
 
 ***
 
@@ -224,7 +224,7 @@ Defined in: [properties/text.mjs:119](https://github.com/auroris/SoulmaskCodec/b
 
 > **sourceValue**: `object`
 
-Defined in: [properties/text.mjs:124](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/text.mjs#L124)
+Defined in: [properties/text.mjs:124](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/text.mjs#L124)
 
 #### type
 
@@ -240,7 +240,7 @@ Defined in: [properties/text.mjs:124](https://github.com/auroris/SoulmaskCodec/b
 
 > **formatOptions**: `any`
 
-Defined in: [properties/text.mjs:125](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/text.mjs#L125)
+Defined in: [properties/text.mjs:125](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/text.mjs#L125)
 
 ***
 
@@ -248,7 +248,7 @@ Defined in: [properties/text.mjs:125](https://github.com/auroris/SoulmaskCodec/b
 
 > **culture**: `string`
 
-Defined in: [properties/text.mjs:126](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/text.mjs#L126)
+Defined in: [properties/text.mjs:126](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/text.mjs#L126)
 
 ***
 
@@ -256,7 +256,7 @@ Defined in: [properties/text.mjs:126](https://github.com/auroris/SoulmaskCodec/b
 
 > **cultureIsNull**: `boolean`
 
-Defined in: [properties/text.mjs:127](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/text.mjs#L127)
+Defined in: [properties/text.mjs:127](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/text.mjs#L127)
 
 ***
 
@@ -264,7 +264,7 @@ Defined in: [properties/text.mjs:127](https://github.com/auroris/SoulmaskCodec/b
 
 > **tableId**: [`FName`](../../primitives/classes/FName.md)
 
-Defined in: [properties/text.mjs:129](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/text.mjs#L129)
+Defined in: [properties/text.mjs:129](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/text.mjs#L129)
 
 ***
 
@@ -272,7 +272,7 @@ Defined in: [properties/text.mjs:129](https://github.com/auroris/SoulmaskCodec/b
 
 > **tableKey**: `string`
 
-Defined in: [properties/text.mjs:130](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/text.mjs#L130)
+Defined in: [properties/text.mjs:130](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/text.mjs#L130)
 
 ***
 
@@ -280,7 +280,7 @@ Defined in: [properties/text.mjs:130](https://github.com/auroris/SoulmaskCodec/b
 
 > **tableKeyIsNull**: `boolean`
 
-Defined in: [properties/text.mjs:131](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/text.mjs#L131)
+Defined in: [properties/text.mjs:131](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/text.mjs#L131)
 
 ***
 
@@ -288,7 +288,7 @@ Defined in: [properties/text.mjs:131](https://github.com/auroris/SoulmaskCodec/b
 
 > **\_raw**: `Uint8Array`\<`ArrayBufferLike`\>
 
-Defined in: [properties/text.mjs:133](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/text.mjs#L133)
+Defined in: [properties/text.mjs:133](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/text.mjs#L133)
 
 ## Accessors
 
@@ -298,7 +298,7 @@ Defined in: [properties/text.mjs:133](https://github.com/auroris/SoulmaskCodec/b
 
 > **get** **text**(): `string`
 
-Defined in: [properties/text.mjs:143](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/text.mjs#L143)
+Defined in: [properties/text.mjs:143](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/text.mjs#L143)
 
 Best displayable string for this FText, or null if none. Walks
 historyType-specific fields to find a text-bearing value.
@@ -313,7 +313,7 @@ historyType-specific fields to find a text-bearing value.
 
 > `static` **fromReader**(`cursor`, `sizeHint`, `ctx?`): `FTextValue`
 
-Defined in: [properties/text.mjs:168](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/text.mjs#L168)
+Defined in: [properties/text.mjs:168](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/text.mjs#L168)
 
 Read an FText. `sizeHint` is the byte budget when called as a top-level
 TextProperty value or inside a finite-budget container; pass `Infinity`
@@ -350,7 +350,7 @@ on unimplemented historyType with no size budget.
 
 > **toBytes**(`writer`): `void`
 
-Defined in: [properties/text.mjs:263](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/text.mjs#L263)
+Defined in: [properties/text.mjs:263](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/text.mjs#L263)
 
 #### Parameters
 
@@ -368,7 +368,7 @@ Defined in: [properties/text.mjs:263](https://github.com/auroris/SoulmaskCodec/b
 
 > **toJSON**(): `object`
 
-Defined in: [properties/text.mjs:316](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/text.mjs#L316)
+Defined in: [properties/text.mjs:316](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/text.mjs#L316)
 
 #### Returns
 
@@ -388,7 +388,7 @@ Defined in: [properties/text.mjs:316](https://github.com/auroris/SoulmaskCodec/b
 
 > `static` **fromJSON**(`j`): `any`
 
-Defined in: [properties/text.mjs:359](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/text.mjs#L359)
+Defined in: [properties/text.mjs:359](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/text.mjs#L359)
 
 #### Parameters
 

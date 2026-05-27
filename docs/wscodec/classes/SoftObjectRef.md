@@ -6,7 +6,7 @@
 
 # Class: SoftObjectRef
 
-Defined in: [properties/soft-object.mjs:19](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/soft-object.mjs#L19)
+Defined in: [properties/soft-object.mjs:19](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/soft-object.mjs#L19)
 
 Decoded SoftObjectProperty value: an `assetPath` plus an optional `subPath`
 pointing inside a level / sublevel.
@@ -17,7 +17,7 @@ pointing inside a level / sublevel.
 
 > **new SoftObjectRef**(`opts?`): `SoftObjectRef`
 
-Defined in: [properties/soft-object.mjs:25](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/soft-object.mjs#L25)
+Defined in: [properties/soft-object.mjs:25](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/soft-object.mjs#L25)
 
 #### Parameters
 
@@ -41,7 +41,7 @@ Defined in: [properties/soft-object.mjs:25](https://github.com/auroris/SoulmaskC
 
 > **assetPath**: `string`
 
-Defined in: [properties/soft-object.mjs:26](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/soft-object.mjs#L26)
+Defined in: [properties/soft-object.mjs:26](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/soft-object.mjs#L26)
 
 ***
 
@@ -49,7 +49,7 @@ Defined in: [properties/soft-object.mjs:26](https://github.com/auroris/SoulmaskC
 
 > **subPath**: `string`
 
-Defined in: [properties/soft-object.mjs:27](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/soft-object.mjs#L27)
+Defined in: [properties/soft-object.mjs:27](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/soft-object.mjs#L27)
 
 ## Methods
 
@@ -57,7 +57,7 @@ Defined in: [properties/soft-object.mjs:27](https://github.com/auroris/SoulmaskC
 
 > `static` **fromReader**(`cursor`): `SoftObjectRef`
 
-Defined in: [properties/soft-object.mjs:34](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/soft-object.mjs#L34)
+Defined in: [properties/soft-object.mjs:34](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/soft-object.mjs#L34)
 
 #### Parameters
 
@@ -75,7 +75,7 @@ Defined in: [properties/soft-object.mjs:34](https://github.com/auroris/SoulmaskC
 
 > **toBytes**(`writer`): `void`
 
-Defined in: [properties/soft-object.mjs:42](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/soft-object.mjs#L42)
+Defined in: [properties/soft-object.mjs:42](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/soft-object.mjs#L42)
 
 #### Parameters
 
@@ -93,7 +93,7 @@ Defined in: [properties/soft-object.mjs:42](https://github.com/auroris/SoulmaskC
 
 > **toJSON**(): `object`
 
-Defined in: [properties/soft-object.mjs:47](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/soft-object.mjs#L47)
+Defined in: [properties/soft-object.mjs:47](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/soft-object.mjs#L47)
 
 #### Returns
 
@@ -113,7 +113,7 @@ Defined in: [properties/soft-object.mjs:47](https://github.com/auroris/SoulmaskC
 
 > `static` **fromJSON**(`j`): `SoftObjectRef`
 
-Defined in: [properties/soft-object.mjs:52](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/soft-object.mjs#L52)
+Defined in: [properties/soft-object.mjs:52](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/soft-object.mjs#L52)
 
 #### Parameters
 

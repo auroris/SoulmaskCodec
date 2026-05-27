@@ -6,7 +6,7 @@
 
 # Class: DelegateProperty
 
-Defined in: [properties/delegate.mjs:25](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/delegate.mjs#L25)
+Defined in: [properties/delegate.mjs:25](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/delegate.mjs#L25)
 
 UE DelegateProperty. Wire bytes are captured verbatim by the
 [OpaqueProperty](OpaqueProperty.md) base; this subclass exists so `tag.type` round-trips
@@ -29,7 +29,7 @@ and so the warn message names the delegate family rather than reporting
 
 > **new DelegateProperty**(`opts?`): `DelegateProperty`
 
-Defined in: [properties/opaque.mjs:92](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/opaque.mjs#L92)
+Defined in: [properties/opaque.mjs:92](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/opaque.mjs#L92)
 
 #### Parameters
 
@@ -61,7 +61,7 @@ Defined in: [properties/opaque.mjs:92](https://github.com/auroris/SoulmaskCodec/
 
 > **bytes**: `Uint8Array`\<`ArrayBufferLike`\>
 
-Defined in: [properties/opaque.mjs:94](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/opaque.mjs#L94)
+Defined in: [properties/opaque.mjs:94](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/opaque.mjs#L94)
 
 #### Inherited from
 
@@ -73,7 +73,7 @@ Defined in: [properties/opaque.mjs:94](https://github.com/auroris/SoulmaskCodec/
 
 > **reason**: `string`
 
-Defined in: [properties/opaque.mjs:95](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/opaque.mjs#L95)
+Defined in: [properties/opaque.mjs:95](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/opaque.mjs#L95)
 
 #### Inherited from
 
@@ -85,7 +85,7 @@ Defined in: [properties/opaque.mjs:95](https://github.com/auroris/SoulmaskCodec/
 
 > **tag**: [`PropertyTag`](PropertyTag.md)
 
-Defined in: [property.mjs:100](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property.mjs#L100)
+Defined in: [property.mjs:100](https://github.com/auroris/SoulmaskCodec/blob/main/src/property.mjs#L100)
 
 #### Inherited from
 
@@ -99,7 +99,7 @@ Defined in: [property.mjs:100](https://github.com/auroris/SoulmaskCodec/blob/016
 
 > **get** **name**(): `string`
 
-Defined in: [property.mjs:104](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property.mjs#L104)
+Defined in: [property.mjs:104](https://github.com/auroris/SoulmaskCodec/blob/main/src/property.mjs#L104)
 
 Property name (`tag.name.value`), or null for a tag-less / synthetic property.
 
@@ -119,7 +119,7 @@ Property name (`tag.name.value`), or null for a tag-less / synthetic property.
 
 > **get** **type**(): `string`
 
-Defined in: [property.mjs:106](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property.mjs#L106)
+Defined in: [property.mjs:106](https://github.com/auroris/SoulmaskCodec/blob/main/src/property.mjs#L106)
 
 Property UE type (`tag.type.value`), or null.
 
@@ -137,7 +137,7 @@ Property UE type (`tag.type.value`), or null.
 
 > `static` **fromReader**(`cursor`, `tag`, `sizeHint`, `ctx`): `DelegateProperty`
 
-Defined in: [properties/delegate.mjs:26](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/delegate.mjs#L26)
+Defined in: [properties/delegate.mjs:26](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/delegate.mjs#L26)
 
 Called by `Property.fromReader` as the fallback when `tag.type.value`
 isn't in the registry — captures the value bytes verbatim and emits
@@ -175,7 +175,7 @@ a structured warn (or throws under strict mode).
 
 > **\_writeValue**(`writer`): `void`
 
-Defined in: [properties/opaque.mjs:110](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/opaque.mjs#L110)
+Defined in: [properties/opaque.mjs:110](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/opaque.mjs#L110)
 
 Write the property's value bytes only — the tag has already been
 emitted by `toBytes`. Subclasses must override.
@@ -204,7 +204,7 @@ on the base class (unimplemented).
 
 > **\_writeJSON**(`j`): `void`
 
-Defined in: [properties/opaque.mjs:114](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/opaque.mjs#L114)
+Defined in: [properties/opaque.mjs:114](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/opaque.mjs#L114)
 
 Add this property's value fields to the JSON object already populated
 with tag fields. Subclasses must override.
@@ -233,7 +233,7 @@ on the base class (unimplemented).
 
 > `static` **fromJSON**(`j`): [`OpaqueProperty`](OpaqueProperty.md)
 
-Defined in: [properties/opaque.mjs:119](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/opaque.mjs#L119)
+Defined in: [properties/opaque.mjs:119](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/opaque.mjs#L119)
 
 Reconstruct a Property from its JSON form. Dispatches on `j.type`;
 unknown types fall through to the opaque fallback.
@@ -262,7 +262,7 @@ when no handler and no opaque fallback are registered.
 
 > **toBytes**(`writer`, `ctx?`): `void`
 
-Defined in: [property.mjs:154](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property.mjs#L154)
+Defined in: [property.mjs:154](https://github.com/auroris/SoulmaskCodec/blob/main/src/property.mjs#L154)
 
 Encode the property to the writer in a single forward pass: emit the
 tag (with a placeholder size), write the value bytes directly into
@@ -295,7 +295,7 @@ Encode context (reserved for future use).
 
 > **toJSON**(): `any`
 
-Defined in: [property.mjs:179](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/property.mjs#L179)
+Defined in: [property.mjs:179](https://github.com/auroris/SoulmaskCodec/blob/main/src/property.mjs#L179)
 
 Flat JSON shape: tag fields + value fields merged into one object via
 the subclass's `_writeJSON`. Inverse of `Property.fromJSON`.

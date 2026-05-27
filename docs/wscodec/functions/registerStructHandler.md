@@ -8,7 +8,7 @@
 
 > **registerStructHandler**(`name`, `handler`): `void`
 
-Defined in: [properties/struct.mjs:89](https://github.com/auroris/SoulmaskCodec/blob/01650b5ab2daafd45d409b4889cbcd65d3712d4a/src/properties/struct.mjs#L89)
+Defined in: [properties/struct.mjs:89](https://github.com/auroris/SoulmaskCodec/blob/main/src/properties/struct.mjs#L89)
 
 Register (or replace) a struct handler. Use this rather than mutating
 STRUCT_HANDLERS directly; this validates handler shape. Without a

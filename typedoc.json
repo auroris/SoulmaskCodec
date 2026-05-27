@@ -14,5 +14,6 @@
   "sort": ["source-order"],
   "hideGenerator": true,
   "githubPages": false,
+  "gitRevision": "main",
   "intentionallyNotExported": ["_FNameLeaf"]
 }
