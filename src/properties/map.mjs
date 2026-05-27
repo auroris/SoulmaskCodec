@@ -1,30 +1,26 @@
 /**
- * `MapProperty`: ordered list of `{key, value}` entries with a preceding
+ * MapProperty: ordered list of {key, value} entries with a preceding
  * "keys to remove" list.
  *
- * Wire layout:
- *
- *   [int32 NumRemoved] [removed keys...] [int32 NumEntries]
- *   [for each entry: key, value...]
+ * Wire layout: [int32 NumRemoved] [removed keys...] [int32 NumEntries]
+ *              [for each entry: key, value...]
  *
  * Soulmask quirks (matter for byte-identical round trip):
  *
- * 1. `Map<Struct, _>` keys are EITHER raw 16-byte FGuids (the guild
- *    manager maps in GAMEMODE) OR a nested property stream
- *    (`XinQingTagLog` - where each key is a `TagName` NameProperty
- *    wrapping a gameplay-effect tag identifier, terminated by None).
- *    The two are distinguished by peeking ahead with
- *    `peekLooksLikePropertyTag`.
- * 2. `Map<_, Struct>` values are EITHER a nested property stream
- *    (`GongHuiMap`, `PlayerGongHuiDataMap`, `GeRenJianZhuYingHuoList`,
- *    `GeRenMapRiZhi`) OR a raw 16-byte FGuid (`PlayerGongHuiMap` -
- *    a player->guild membership lookup). The two are distinguished by
- *    peeking ahead with `peekLooksLikePropertyTag`.
+ *   1. Map<Struct, _> keys are EITHER raw 16-byte FGuids (the guild manager
+ *      maps in GAMEMODE) OR a nested property stream (`XinQingTagLog` —
+ *      where each key is a `TagName` NameProperty wrapping a gameplay-effect
+ *      tag identifier, terminated by None). The two are distinguished by
+ *      peeking ahead with `peekLooksLikePropertyTag`.
+ *
+ *   2. Map<_, Struct> values are EITHER a nested property stream
+ *      (`GongHuiMap`, `PlayerGongHuiDataMap`, `GeRenJianZhuYingHuoList`,
+ *      `GeRenMapRiZhi`) OR a raw 16-byte FGuid (`PlayerGongHuiMap` —
+ *      a player→guild membership lookup). The two are distinguished by
+ *      peeking ahead with `peekLooksLikePropertyTag`.
  *
  * Non-Struct key/value types share the array-element wire shape and
  * delegate to the shared element-codec.
- *
- * @module wscodec/properties/map
  */
 
 import { Property, registerProperty } from '../property.mjs';
@@ -34,23 +30,7 @@ import { peekLooksLikePropertyTag } from '../property-stream.mjs';
 import { StructValue } from './struct.mjs';
 import { readElement, writeElement, elementToJSON, elementFromJSON } from '../element-codec.mjs';
 
-/**
- * Property wrapping an ordered map (with a separate "removed keys" list).
- * Entries preserve their wire order on `this.entries`.
- *
- * @typedef {{key: *, value: *}} MapEntry
- */
-
-/**
- * Ordered map property.
- */
 export class MapProperty extends Property {
-  /**
-   * @param {Object} [fields]
-   * @param {PropertyTag} [fields.tag]
-   * @param {Array<*>} [fields.removed=[]] - Removed keys.
-   * @param {Array<MapEntry>} [fields.entries=[]] - Active `{key, value}` entries.
-   */
   constructor({ tag, removed = [], entries = [] } = {}) {
     super({ tag });
     this.removed = removed;

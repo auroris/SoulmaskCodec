@@ -1,42 +1,40 @@
 /**
- * `ArrayProperty`: homogeneous array of values, sized by the outer tag.
+ * ArrayProperty: homogeneous array of values, sized by the outer tag.
  *
- * Wire layout: `[int32 NumElements] [elements...]`
+ * Wire layout: [int32 NumElements] [elements...]
  *
- * - `Array<StructProperty>` additionally carries a single inner PropertyTag
+ *   Array<StructProperty> additionally carries a single inner PropertyTag
  *   (one shared by all elements) immediately after the count. Each
- *   element is then either a binary record (via `STRUCT_HANDLERS`) or a
+ *   element is then either a binary record (via STRUCT_HANDLERS) or a
  *   nested PropertyStream terminated by None. The inner tag's size on
  *   the wire is the TOTAL byte length of all encoded elements (verified:
- *   `Array<Guid>{6}` has `innerTag.size=96=6*16`).
- * - `Array<ObjectProperty>` elements have variable shapes and no
- *   per-element delimiter; see `object.mjs` for the four-guard decode.
- *   Some Soulmask ObjectProperty arrays (`JianZhuInstYuanXings`:
- *   building-zone yuan-xings) ALSO interleave a placement-binary block
- *   after each kind=3 element - handled by
- *   `_tryReadObjectArrayPerElementBlock` below.
- * - Other inner types (numeric / Str / Name / Enum / Byte / Text / Soft*):
+ *   Array<Guid>{6} has innerTag.size=96=6×16).
+ *
+ *   Array<ObjectProperty> elements have variable shapes and no per-element
+ *   delimiter; see object.mjs for the four-guard decode. Some Soulmask
+ *   ObjectProperty arrays (JianZhuInstYuanXings: building-zone yuan-xings)
+ *   ALSO interleave a placement-binary block after each kind=3 element —
+ *   handled by `tryReadObjectArrayPerElementBlock` below.
+ *
+ *   Other inner types (numeric / Str / Name / Enum / Byte / Text / Soft*):
  *   element is the bare value, no per-element wrapper. Reading / writing
- *   / JSON for these delegates to `element-codec.mjs`.
+ *   / JSON for these delegates to element-codec.mjs.
  *
  * The placement-binary block per kind=3 yuan-xing:
  *
  *   [8 bytes zero header]
- *   [u32 stride=64] [u32 count]  [count * 16 float32]   transforms (4x4)
- *   [u32 stride= 4] [u32 count]  [count * u32]          ids
- *   [u32 stride=64] [u32 count]  [count * 16 float32]   aux (bbox + scale)
+ *   [u32 stride=64] [u32 count]  [count × 16 float32]   transforms (4×4)
+ *   [u32 stride= 4] [u32 count]  [count × u32]          ids
+ *   [u32 stride=64] [u32 count]  [count × 16 float32]   aux (bbox + scale)
  *
- * Verified in-game 2026-05-18: `numElements` counts UNIQUE prototypes
- * (foundation, wall, door frame, ...); `transforms.length` is the
- * placed-piece count per prototype; `aux.length` is typically equal or
- * one greater.
+ * Verified in-game 2026-05-18: numElements counts UNIQUE prototypes
+ * (foundation, wall, door frame, …); transforms.length is the placed-piece
+ * count per prototype; aux.length is typically equal or one greater.
  *
  * NaN bit patterns inside the float32 sections are common in Soulmask aux
  * data (observed 0xFFFFFFFF as an "invalid" sentinel) and would collapse
  * to canonical 0x7FC00000 if round-tripped via a JS Number. We capture
  * non-canonical NaNs as `{ $nanBits: u32 }` wrappers.
- *
- * @module wscodec/properties/array
  */
 
 import { Property, registerProperty } from '../property.mjs';
@@ -44,20 +42,7 @@ import { PropertyTag } from '../tag.mjs';
 import { StructValue, STRUCT_HANDLERS } from './struct.mjs';
 import { readElement, writeElement, elementToJSON, elementFromJSON, OBJECT_INNER_TYPES } from '../element-codec.mjs';
 
-/**
- * Property wrapping a homogeneous array. See the module description for the
- * wire layout, per-inner-type variations, and the Soulmask-specific
- * placement-binary trailing block.
- */
 export class ArrayProperty extends Property {
-  /**
-   * @param {Object} [fields]
-   * @param {PropertyTag} [fields.tag]
-   * @param {Array<*>} [fields.elements=[]] - Decoded element values; shape depends on `tag.innerType`.
-   * @param {PropertyTag|null} [fields.innerTag=null] - Inner PropertyTag for `Array<StructProperty>`.
-   * @param {number|null} [fields.innerTagSize=null] - Original wire value of `innerTag.size`, captured for byte-identical round-trip.
-   * @param {Array<({transforms: number[][], ids: number[], aux: number[][]}|null)>|null} [fields.perElementTrailings=null] - Per-element placement-binary blocks for `Array<ObjectProperty>` (Soulmask `JianZhuInstYuanXings`); null when not present.
-   */
   constructor({ tag, elements = [], innerTag = null, innerTagSize = null, perElementTrailings = null } = {}) {
     super({ tag });
     this.elements = elements;

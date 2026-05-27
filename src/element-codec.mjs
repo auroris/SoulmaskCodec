@@ -3,37 +3,33 @@
  *
  * ArrayProperty / SetProperty / MapProperty all need to read/write/JSON
  * elements of a single declared inner type (or two, for Map). The wire
- * shape for any given inner type is identical across containers - there
+ * shape for any given inner type is identical across containers — there
  * is no per-element tag wrapper. This module is the single place that
  * encoding lives.
  *
  * One handler table (`ELEMENT_CODECS`) per inner type provides
  * `{ read, write, toJSON, fromJSON }`; the four exported dispatch
- * functions just look up and call. Aliases (Enum->Name, Class/Weak/
- * Lazy/WS->Object, SoftClass->SoftObject) share the same handler so
+ * functions just look up and call. Aliases (Enum→Name, Class/Weak/
+ * Lazy/WS→Object, SoftClass→SoftObject) share the same handler so
  * there is no chance of one accessor drifting from another.
  *
  * `StructProperty` inner type is NOT handled here, because the three
  * containers differ in what they do with structs:
- *
- * - ArrayProperty<Struct>: nested PropertyStream per element via
- *   StructValue (with a shared inner PropertyTag).
- * - SetProperty<Struct>: raw 16-byte FGuid per element.
- * - MapProperty<Struct, _>: raw 16-byte FGuid as key.
- * - MapProperty<_, Struct>: nested PropertyStream OR raw FGuid as
- *   value, decided by a peek heuristic.
- *
- * Each container's reader/writer handles its Struct case before delegating
- * to these helpers for non-Struct cases.
+ *   - ArrayProperty<Struct>: nested PropertyStream per element via
+ *     StructValue (with a shared inner PropertyTag).
+ *   - SetProperty<Struct>: raw 16-byte FGuid per element.
+ *   - MapProperty<Struct, _>: raw 16-byte FGuid as key.
+ *   - MapProperty<_, Struct>: nested PropertyStream OR raw FGuid as
+ *     value, decided by a peek heuristic.
+ * Each container's reader/writer handles its Struct case before
+ * delegating to these helpers for non-Struct cases.
  *
  * `sizeHint` is only consulted for ObjectProperty-family elements
  * (variable wire shape; needs a byte budget for the four-guard decode in
- * `object.mjs`). For all other inner types it's ignored. Set/Map pass
- * `Infinity` because they have no per-element budget - Soulmask data
+ * object.mjs). For all other inner types it's ignored. Set/Map pass
+ * `Infinity` because they have no per-element budget — Soulmask data
  * doesn't exercise Set<Object> / Map<_,Object> so the heuristics haven't
  * been stress-tested in those contexts.
- *
- * @module wscodec/element-codec
  */
 
 import { FName } from './primitives.mjs';
@@ -109,11 +105,9 @@ ELEMENT_CODECS.WSObjectProperty    = ELEMENT_CODECS.ObjectProperty;
 ELEMENT_CODECS.SoftClassProperty   = ELEMENT_CODECS.SoftObjectProperty;
 
 /**
- * Inner-type names that resolve to `ObjectRef` on the wire. Exported so
+ * Inner-type names that resolve to ObjectRef on the wire. Exported so
  * containers (array.mjs) can branch on object-family without re-listing
  * the aliases.
- *
- * @type {Set<string>}
  */
 export const OBJECT_INNER_TYPES = new Set([
   'ObjectProperty', 'ClassProperty', 'WeakObjectProperty',
@@ -126,50 +120,18 @@ function codec(innerType) {
   return c;
 }
 
-/**
- * Read one element of `innerType` from the cursor.
- *
- * @param {Cursor} cursor
- * @param {string} innerType - Wire type name (e.g. `'IntProperty'`).
- * @param {number} sizeHint - Per-element byte budget. Only consulted for ObjectProperty-family elements.
- * @param {Object} [ctx]
- * @returns {*} The decoded value (shape depends on `innerType`).
- */
 export function readElement(cursor, innerType, sizeHint, ctx) {
   return codec(innerType).read(cursor, sizeHint, ctx);
 }
 
-/**
- * Write one element of `innerType` to the writer.
- *
- * @param {Writer} writer
- * @param {string} innerType - Wire type name.
- * @param {*} value - Value to encode.
- * @param {Object} [ctx]
- */
 export function writeElement(writer, innerType, value, ctx) {
   codec(innerType).write(writer, value, ctx);
 }
 
-/**
- * Convert a decoded element to its JSON-safe form.
- *
- * @param {*} value
- * @param {string} innerType
- * @returns {*}
- */
 export function elementToJSON(value, innerType) {
   return codec(innerType).toJSON(value);
 }
 
-/**
- * Reconstruct an element from its JSON form. Falls through to `OpaqueValue`
- * when the JSON carries the opaque marker.
- *
- * @param {*} j
- * @param {string} innerType
- * @returns {*}
- */
 export function elementFromJSON(j, innerType) {
   if (OpaqueValue.isOpaqueJSON(j)) return OpaqueValue.fromJSON(j);
   return codec(innerType).fromJSON(j);

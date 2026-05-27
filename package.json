@@ -24,12 +24,10 @@
   "files": [
     "src/",
     "dist/",
-    "docs/",
     "README.md"
   ],
   "scripts": {
     "build": "node scripts/build.mjs",
-    "build-docs": "node scripts/build-docs.mjs",
     "build-translations": "node scripts/build-translations.mjs",
     "prepublishOnly": "npm run build",
     "test": "node test/run-all.mjs",

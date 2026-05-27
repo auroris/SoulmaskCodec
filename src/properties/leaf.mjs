@@ -7,12 +7,6 @@
  * less-uniform ones (Bool, Str, Name, Byte, Enum) are hand-written
  * because each has a distinct twist (tag-stored value, isNull/isUnicode
  * wire flags, dual form, FName coercion).
- *
- * The exported `IntProperty`, `Int8Property`, ..., `DoubleProperty` are
- * concrete subclasses of `Property`. Each one's `value` field holds the
- * decoded number (or decimal string for 64-bit integers).
- *
- * @module wscodec/properties/leaf
  */
 
 import { Property, registerProperty } from '../property.mjs';
@@ -74,17 +68,7 @@ export const DoubleProperty = defineNumericLeaf('DoubleProperty', NUMERIC_LEAVES
 // the empty value buffer, so the boolVal byte is in the tag bytes. The
 // `value` accessor is a getter/setter over tag.boolVal so the two can't go
 // stale relative to each other.
-
-/**
- * Boolean leaf property. The value is stored on the tag itself (`tag.boolVal`);
- * no payload bytes follow the tag on the wire.
- */
 export class BoolProperty extends Property {
-  /**
-   * @param {Object} [fields]
-   * @param {PropertyTag} [fields.tag]
-   * @param {boolean} [fields.value=false]
-   */
   constructor({ tag, value = false } = {}) {
     super({ tag });
     if (tag) tag.boolVal = value ? 1 : 0;
@@ -110,20 +94,7 @@ export class BoolProperty extends Property {
 registerProperty('BoolProperty', BoolProperty);
 
 // ── StrProperty ─────────────────────────────────────────────────────────────
-
-/**
- * String leaf. Carries `isUnicode` and `isNull` flags so the FString wire
- * encoding (ANSI vs UTF-16, null-form vs empty-with-terminator) round-trips
- * byte-identically.
- */
 export class StrProperty extends Property {
-  /**
-   * @param {Object} [fields]
-   * @param {PropertyTag} [fields.tag]
-   * @param {string} [fields.value=''] - Decoded string.
-   * @param {boolean} [fields.isNull=false] - Empty-value wire-form selector.
-   * @param {boolean|null} [fields.isUnicode=null] - Explicit wire encoding; null auto-detects.
-   */
   constructor({ tag, value = '', isNull = false, isUnicode = null } = {}) {
     super({ tag });
     this.value = value;
@@ -174,15 +145,7 @@ class _FNameLeaf extends Property {
   static fromJSON(j) { return new this({ tag: PropertyTag.fromJSON(j), value: FName.from(j.value) }); }
 }
 
-/**
- * `NameProperty`: leaf whose value is an `FName`. Same wire shape as
- * `EnumProperty`; kept as separate classes so `tag.type` round-trips.
- */
 export class NameProperty extends _FNameLeaf {}
-
-/**
- * `EnumProperty`: leaf whose value is the enum member's `FName`.
- */
 export class EnumProperty extends _FNameLeaf {}
 
 registerProperty('NameProperty', NameProperty);
@@ -192,17 +155,7 @@ registerProperty('EnumProperty', EnumProperty);
 //
 // Dual-form: when tag.enumName === 'None' the value is a raw u8; otherwise
 // it's an FName (the enum member).
-
-/**
- * Single-byte leaf. Dual wire form: when `tag.enumName.value === 'None'` the
- * value is a raw u8 (0..255); otherwise it's the FName of an enum member.
- */
 export class ByteProperty extends Property {
-  /**
-   * @param {Object} [fields]
-   * @param {PropertyTag} [fields.tag]
-   * @param {number|FName} [fields.value=0]
-   */
   constructor({ tag, value = 0 } = {}) {
     super({ tag });
     this.value = value;
