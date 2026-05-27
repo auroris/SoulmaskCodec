@@ -1,26 +1,38 @@
 /**
  * PropertyStream: an ordered list of Property objects terminated by a
- * "None" tag. This is the recursive unit of the codec — it appears as:
+ * "None" tag. This is the recursive unit of the codec - it appears as:
  *
- *   1. The top-level body of an UnrealBlob (with a 4-byte FName.Number
- *      trailer after the None terminator).
- *   2. The value of an unknown-shape StructProperty.
- *   3. The `embedded` field of an ObjectRef.
- *   4. Each element of an ArrayProperty<StructProperty>.
- *   5. The value side of a MapProperty<_, StructProperty> entry, when the
- *      wire shape is a property stream rather than a raw 16-byte FGuid.
+ * 1. The top-level body of an UnrealBlob (with a 4-byte FName.Number
+ *    trailer after the None terminator).
+ * 2. The value of an unknown-shape StructProperty.
+ * 3. The `embedded` field of an ObjectRef.
+ * 4. Each element of an ArrayProperty<StructProperty>.
+ * 5. The value side of a MapProperty<_, StructProperty> entry, when the
+ *    wire shape is a property stream rather than a raw 16-byte FGuid.
  *
  * The outermost stream's None tag is followed by a 4-byte FName.Number=0
  * trailer; nested streams typically aren't, except for certain Soulmask
  * embedded streams (e.g. JianZhuInstGLQComponent) that DO carry the trailer.
  * `terminatorTrailer` captures which form was on the wire so write can
  * reproduce it.
+ *
+ * @module wscodec/property-stream
  */
 
 import { Property, TerminatorProperty } from './property.mjs';
 import { FName } from './primitives.mjs';
 
+/**
+ * Ordered list of decoded `Property` objects with a terminator flag and
+ * an optional trailing FName.Number=0 record.
+ */
 export class PropertyStream {
+  /**
+   * @param {Object} [fields]
+   * @param {Array<Property>} [fields.properties=[]]
+   * @param {boolean} [fields.terminated=false] - True iff a None tag was observed at the end of the stream.
+   * @param {boolean} [fields.terminatorTrailer=false] - True iff a 4-byte FName.Number=0 followed the None tag.
+   */
   constructor({ properties = [], terminated = false, terminatorTrailer = false } = {}) {
     this.properties = properties;
     this.terminated = terminated;
@@ -31,9 +43,16 @@ export class PropertyStream {
    * Read properties until either a None terminator or `endOffset` is reached.
    *
    * `consumeTerminatorTrailer` is true for the outermost stream. For nested
-   * streams pass false; callers (e.g. ObjectRef) that detect a trailer in
-   * the embedded byte budget set `terminatorTrailer` on the resulting
-   * stream after the fact (see `attachTerminatorTrailer`).
+   * streams pass false; callers (e.g. `ObjectRef.fromReaderTopLevel`) that
+   * detect a trailer in the embedded byte budget set `terminatorTrailer` on
+   * the resulting stream after the fact.
+   *
+   * @param {Cursor} cursor
+   * @param {number} [endOffset=Infinity] - Absolute cursor offset at which to stop reading.
+   * @param {Object} [opts]
+   * @param {boolean} [opts.consumeTerminatorTrailer=false] - Whether to consume the 4-byte FName.Number=0 trailer if present.
+   * @param {Object} [opts.ctx]
+   * @returns {PropertyStream}
    */
   static fromReader(cursor, endOffset = Infinity, { consumeTerminatorTrailer = false, ctx = {} } = {}) {
     const properties = [];
@@ -58,6 +77,11 @@ export class PropertyStream {
    * Write the properties, then a None terminator. The trailer (4-byte
    * FName.Number=0) is emitted when `this.terminatorTrailer` is true OR
    * the caller passes `emitTerminatorTrailer: true` (top-level stream).
+   *
+   * @param {Writer} writer
+   * @param {Object} [opts]
+   * @param {boolean} [opts.emitTerminatorTrailer=false] - Force the trailer regardless of `this.terminatorTrailer`.
+   * @param {Object} [opts.ctx]
    */
   toBytes(writer, { emitTerminatorTrailer = false, ctx = {} } = {}) {
     for (const p of this.properties) p.toBytes(writer, ctx);
@@ -67,6 +91,7 @@ export class PropertyStream {
     }
   }
 
+  /** @returns {Object} JSON form preserving terminator flags. */
   toJSON() {
     const j = { properties: this.properties.map(p => p.toJSON()) };
     if (this.terminated) j.terminated = true;
@@ -74,6 +99,10 @@ export class PropertyStream {
     return j;
   }
 
+  /**
+   * @param {Object} j
+   * @returns {PropertyStream}
+   */
   static fromJSON(j) {
     return new PropertyStream({
       properties: (j.properties ?? []).map(p => Property.fromJSON(p)),
@@ -87,12 +116,13 @@ export class PropertyStream {
  * Peek the next bytes of `cursor` (without advancing): do they look like
  * the start of a PropertyTag (an FString that names a property)?
  *
- * Used inside Map<_,Struct> entry values where the wire shape is ambiguous —
+ * Used inside Map<_,Struct> entry values where the wire shape is ambiguous -
  * the same 4 bytes could be the SaveNum of a property-name FString or the
  * first uint32 of an FGuid. A property name FString is:
- *   - int32 SaveNum > 0 and reasonably small (≤ 64 chars in Soulmask)
- *   - SaveNum bytes of ANSI body whose last byte is NUL
- *   - body chars (minus NUL) are identifier-safe: A-Z, a-z, 0-9, _
+ *
+ * - int32 SaveNum > 0 and reasonably small (<= 64 chars in Soulmask)
+ * - SaveNum bytes of ANSI body whose last byte is NUL
+ * - body chars (minus NUL) are identifier-safe: A-Z, a-z, 0-9, _
  *
  * Random GUID bytes effectively never satisfy this: the first uint32 is
  * ~uniform over [0, 2^32), and even when it lands in a plausible-length
@@ -102,6 +132,9 @@ export class PropertyStream {
  * Limitation: only matches ANSI property names (SaveNum > 0). Every
  * Soulmask property name observed in world.db is ASCII; UTF-16 property
  * names inside Map<_,Struct> would need an additional branch.
+ *
+ * @param {Cursor} cursor
+ * @returns {boolean} True if the cursor's next bytes plausibly start a PropertyTag.
  */
 export function peekLooksLikePropertyTag(cursor) {
   if (cursor.remaining() < 8) return false;

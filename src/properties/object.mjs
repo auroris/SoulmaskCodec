@@ -1,19 +1,19 @@
 /**
- * ObjectProperty (and its aliases) + the ObjectRef value class.
+ * `ObjectProperty` (and its aliases) + the `ObjectRef` value class.
  *
- * Aliased property tags that all wrap an ObjectRef:
- *   ObjectProperty, ClassProperty, WeakObjectProperty, LazyObjectProperty,
- *   WSObjectProperty (Soulmask alias)
+ * Aliased property tags that all wrap an `ObjectRef`: `ObjectProperty`,
+ * `ClassProperty`, `WeakObjectProperty`, `LazyObjectProperty`,
+ * `WSObjectProperty` (Soulmask alias).
  *
  * Soulmask's ObjectProperty wire shape is variable; the reader uses the
  * tag's size budget to decide which of these shapes is on the wire:
  *
  *   u8       kind             always present
  *   u32      kindOnePrefix    ONLY when kind === 0x01 (Soulmask). The
- *                             observed value is always 1; semantic
- *                             unknown. Captured verbatim and replayed.
- *                             Seen on hard actor references like NPC
- *                             `HBindBGCompActor` (pawn → inventory link).
+ *                             observed value is always 1; semantic unknown.
+ *                             Captured verbatim and replayed. Seen on hard
+ *                             actor references like NPC `HBindBGCompActor`
+ *                             (pawn -> inventory link).
  *   FString  path             present iff budget remains
  *   FString  classPath        present iff budget remains
  *   stream   embedded         present iff budget remains; terminated by None,
@@ -25,13 +25,32 @@
  * the writer skips it). An empty string with the corresponding `isNull`
  * flag preserves the wire distinction between FString null-form (SaveNum=0,
  * 4 B) and empty-with-terminator (SaveNum=1, 5 B).
+ *
+ * @module wscodec/properties/object
  */
 
 import { Property, registerProperty } from '../property.mjs';
 import { PropertyTag } from '../tag.mjs';
 import { PropertyStream } from '../property-stream.mjs';
 
+/**
+ * Decoded `ObjectProperty` value. Captures the wire's variable-shape
+ * structure (kind / optional kindOnePrefix / optional path / optional
+ * classPath / optional embedded stream) so that any combination round-trips
+ * byte-identically.
+ */
 export class ObjectRef {
+  /**
+   * @param {Object} [fields]
+   * @param {number} [fields.kind=0x03] - First byte; selects the wire shape.
+   * @param {number|null} [fields.kindOnePrefix=null] - Captured u32 that follows `kind` when `kind === 0x01`.
+   * @param {string|null} [fields.path=null] - Object path FString, or null if absent on the wire.
+   * @param {boolean} [fields.pathIsNull=false] - FString null-form selector for an empty `path`.
+   * @param {string|null} [fields.classPath=null] - Class path FString, or null if absent on the wire.
+   * @param {boolean} [fields.classPathIsNull=false] - FString null-form selector for an empty `classPath`.
+   * @param {PropertyStream|null} [fields.embedded=null] - Nested property stream, or null if absent.
+   * @param {boolean} [fields.hasTerminatorTrailer=false] - True iff the embedded stream's None tag was followed by a 4-byte FName.Number=0.
+   */
   constructor({
     kind = 0x03,
     kindOnePrefix = null,
@@ -59,12 +78,18 @@ export class ObjectRef {
     this.hasTerminatorTrailer = hasTerminatorTrailer;
   }
 
+  /** @returns {boolean} True iff `embedded` is a populated `PropertyStream`. */
   get hasEmbedded() { return this.embedded instanceof PropertyStream; }
 
   /**
    * Top-level read: `sizeHint` is the tight per-property byte budget from
    * the tag. The reader steps through kind / kindOnePrefix / path /
    * classPath / embedded, falling out at each "exhausted budget" check.
+   *
+   * @param {Cursor} cursor
+   * @param {number} sizeHint - Tag-declared value byte budget.
+   * @param {Object} [ctx]
+   * @returns {ObjectRef}
    */
   static fromReaderTopLevel(cursor, sizeHint, ctx) {
     const start = cursor.pos();
@@ -120,12 +145,17 @@ export class ObjectRef {
    * Each guard catches a different way the loose budget could mislead the
    * reader into consuming the next element's bytes:
    *
-   *   Guard 1: no room for even a null-form classPath FString (4 bytes).
-   *   Guard 2: peek classPath saveNum is implausibly large (|n| > 1024).
-   *   Guard 3: classPath's first content byte isn't '/' (Soulmask asset
-   *            paths are always "/Script/..." or "/Game/...").
-   *   Guard 4: bytes following classPath don't look like a PropertyTag
-   *            start (small ANSI saveNum + identifier-start byte).
+   * - Guard 1: no room for even a null-form classPath FString (4 bytes).
+   * - Guard 2: peek classPath saveNum is implausibly large (|n| > 1024).
+   * - Guard 3: classPath's first content byte isn't `/` (Soulmask asset
+   *   paths are always `/Script/...` or `/Game/...`).
+   * - Guard 4: bytes following classPath don't look like a PropertyTag
+   *   start (small ANSI saveNum + identifier-start byte).
+   *
+   * @param {Cursor} cursor
+   * @param {number} sizeHint - Remaining array byte budget.
+   * @param {Object} [ctx]
+   * @returns {ObjectRef}
    */
   static fromReaderArrayElement(cursor, sizeHint, ctx) {
     const start = cursor.pos();
@@ -243,6 +273,14 @@ export class ObjectRef {
     });
   }
 
+  /**
+   * Encode this `ObjectRef` to bytes.
+   *
+   * @param {Writer} writer
+   * @param {Object} [opts]
+   * @param {boolean} [opts.requireClassPath=false] - Force `classPath` emission even when it's null. Used by callers (e.g. array elements) where omitting it would create ambiguity.
+   * @param {Object} [opts.ctx]
+   */
   toBytes(writer, { requireClassPath = false, ctx = {} } = {}) {
     writer.writeUint8(this.kind ?? 0x03);
     if (this.kindOnePrefix !== null && this.kindOnePrefix !== undefined) {
@@ -285,7 +323,18 @@ export class ObjectRef {
   }
 }
 
+/**
+ * Wrapper around `ObjectRef` that participates in the `Property` registry.
+ * Aliases (`ClassProperty`, `WeakObjectProperty`, `LazyObjectProperty`,
+ * `WSObjectProperty`) share the same wire layout; subclasses exist only so
+ * `tag.type` round-trips.
+ */
 export class ObjectProperty extends Property {
+  /**
+   * @param {Object} [fields]
+   * @param {PropertyTag} [fields.tag]
+   * @param {ObjectRef|null} [fields.value=null]
+   */
   constructor({ tag, value = null } = {}) {
     super({ tag });
     this.value = value;   // ObjectRef
@@ -305,9 +354,14 @@ export class ObjectProperty extends Property {
 }
 
 // Aliases: same wire layout, different declared type in the tag.
+
+/** Alias for `ObjectProperty` with `tag.type === 'ClassProperty'`. */
 export class ClassProperty       extends ObjectProperty {}
+/** Alias for `ObjectProperty` with `tag.type === 'WeakObjectProperty'`. */
 export class WeakObjectProperty  extends ObjectProperty {}
+/** Alias for `ObjectProperty` with `tag.type === 'LazyObjectProperty'`. */
 export class LazyObjectProperty  extends ObjectProperty {}
+/** Soulmask-specific alias for `ObjectProperty` (`tag.type === 'WSObjectProperty'`). */
 export class WSObjectProperty    extends ObjectProperty {}
 
 registerProperty('ObjectProperty',     ObjectProperty);

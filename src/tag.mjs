@@ -18,6 +18,8 @@
  *   if Type == "MapProperty":     FString InnerType + FString ValueType
  *   u8       HasPropertyGuid
  *   if HasPropertyGuid:           FGuid PropertyGuid
+ *
+ * @module wscodec/tag
  */
 
 import { FName, FGuid } from './primitives.mjs';
@@ -62,7 +64,30 @@ const TAG_EXTRAS = {
 TAG_EXTRAS.EnumProperty = TAG_EXTRAS.ByteProperty;
 TAG_EXTRAS.SetProperty  = TAG_EXTRAS.ArrayProperty;
 
+/**
+ * The header that precedes each property's value bytes. Carries the
+ * property's name, type, size, array index, and any per-type extras
+ * (struct name/guid, enum name, inner/value types, optional property guid).
+ *
+ * Also represents the stream terminator: when the wire name is `"None"`,
+ * `isTerminator` is true and the rest of the fields are unused.
+ */
 export class PropertyTag {
+  /**
+   * @param {Object} [fields]
+   * @param {FName|null} [fields.name=null]
+   * @param {FName|null} [fields.type=null]
+   * @param {number} [fields.arrayIndex=0]
+   * @param {FName|null} [fields.structName=null] - StructProperty only.
+   * @param {FGuid|null} [fields.structGuid=null] - StructProperty only.
+   * @param {number|null} [fields.boolVal=null] - BoolProperty only.
+   * @param {FName|null} [fields.enumName=null] - ByteProperty/EnumProperty only.
+   * @param {FName|null} [fields.innerType=null] - Array/Set/Map element type.
+   * @param {FName|null} [fields.valueType=null] - Map value type.
+   * @param {boolean} [fields.hasPropertyGuid=false]
+   * @param {FGuid|null} [fields.propertyGuid=null]
+   * @param {boolean} [fields.isTerminator=false] - True iff this tag represents the stream terminator.
+   */
   constructor(fields = {}) {
     this.name = fields.name ?? null;
     this.type = fields.type ?? null;
@@ -80,8 +105,11 @@ export class PropertyTag {
 
   /**
    * Read a PropertyTag from the cursor. The wire `size` field is captured
-   * in `tag._readSize` (transient — used by Property.fromReader as the
+   * in `tag._readSize` (transient - used by Property.fromReader as the
    * value-decoding byte budget, then discarded).
+   *
+   * @param {Cursor} cursor
+   * @returns {PropertyTag}
    */
   static fromReader(cursor) {
     const name = FName.fromReader(cursor);
@@ -103,13 +131,16 @@ export class PropertyTag {
    * Emit the tag bytes with a zero placeholder for the `size` field, and
    * return the absolute writer offset of that placeholder so the caller
    * can patch it once the value bytes have been written. This lets us
-   * encode a property in a single forward pass — no sub-buffering of the
+   * encode a property in a single forward pass - no sub-buffering of the
    * value just to measure its size.
    *
    * Terminator tags have no size field and no further payload; this
    * returns -1 so the caller can branch (though in practice terminator
    * tags are emitted directly via `new FName('None').toBytes(writer)` and
    * don't pass through this method).
+   *
+   * @param {Writer} writer
+   * @returns {number} Absolute writer position of the size placeholder, or -1 for a terminator tag.
    */
   toBytes(writer) {
     this.name.toBytes(writer);
@@ -124,6 +155,12 @@ export class PropertyTag {
     return sizePos;
   }
 
+  /**
+   * Flat JSON form of the tag. Spread into the surrounding property's JSON
+   * by `Property.toJSON`.
+   *
+   * @returns {Object}
+   */
   toJSON() {
     const j = { name: this.name.toJSON(), type: this.type.toJSON() };
     if (this.arrayIndex) j.arrayIndex = this.arrayIndex;
@@ -135,6 +172,12 @@ export class PropertyTag {
     return j;
   }
 
+  /**
+   * Reconstruct a PropertyTag from its JSON form.
+   *
+   * @param {Object} j
+   * @returns {PropertyTag}
+   */
   static fromJSON(j) {
     const tag = new PropertyTag({
       name: FName.from(j.name),

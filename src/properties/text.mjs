@@ -1,5 +1,5 @@
 /**
- * TextProperty (FText) + FTextValue.
+ * `TextProperty` (FText) + `FTextValue`.
  *
  * UE4 FText wire format:
  *   uint32  Flags
@@ -48,6 +48,8 @@
  * ContentType codes (for HistoryType 1, 2, and 4's SourceValue):
  *   0=Int(int64)  1=UInt(uint64)  2=Float(f32)  3=Double(f64)
  *   4=Text(FText, recursive)  5=Gender(int8)
+ *
+ * @module wscodec/properties/text
  */
 
 import { Property, registerProperty, warnOrThrow } from '../property.mjs';
@@ -56,7 +58,35 @@ import { FName } from '../primitives.mjs';
 import { OpaqueValue } from './opaque.mjs';
 import { b64encode, b64decode } from '../base64.mjs';
 
+/**
+ * Decoded `FText` value. Only the subset of fields relevant to the
+ * `historyType` is populated; see the module description for the wire
+ * shape per `historyType` value.
+ */
 export class FTextValue {
+  /**
+   * @param {Object} [fields]
+   * @param {number} [fields.flags=0] - FText flags (uint32).
+   * @param {number} [fields.historyType=-1] - One of -1, 0, 1, 2, 4, 11 (others captured as `_raw`).
+   * @param {string} [fields.displayString] - historyType=-1.
+   * @param {boolean} [fields.displayStringIsNull=false] - historyType=-1.
+   * @param {string} [fields.namespace] - historyType=0.
+   * @param {boolean} [fields.namespaceIsNull=false] - historyType=0.
+   * @param {string} [fields.key] - historyType=0.
+   * @param {boolean} [fields.keyIsNull=false] - historyType=0.
+   * @param {string} [fields.sourceString] - historyType=0.
+   * @param {boolean} [fields.sourceStringIsNull=false] - historyType=0.
+   * @param {FTextValue} [fields.sourceFmt] - historyType=1 or 2.
+   * @param {Array<Object>} [fields.arguments] - historyType=1 (named) or 2 (positional).
+   * @param {Object} [fields.sourceValue] - historyType=4.
+   * @param {Object|null} [fields.formatOptions] - historyType=4.
+   * @param {string|null} [fields.culture] - historyType=4.
+   * @param {boolean} [fields.cultureIsNull=false] - historyType=4.
+   * @param {FName} [fields.tableId] - historyType=11.
+   * @param {string} [fields.tableKey] - historyType=11.
+   * @param {boolean} [fields.tableKeyIsNull=false] - historyType=11.
+   * @param {Uint8Array} [fields._raw] - Verbatim bytes for unhandled `historyType` values.
+   */
   constructor({
     flags = 0, historyType = -1,
     displayString, displayStringIsNull = false,
@@ -100,7 +130,11 @@ export class FTextValue {
     }
   }
 
-  /** Best displayable string for this FText, or null if none. */
+  /**
+   * Best displayable string for this FText, or null if none.
+   *
+   * @returns {string|null}
+   */
   get text() {
     if (this.historyType === -1) return this.displayString;
     if (this.historyType === 0)  return this.sourceString ?? null;
@@ -118,7 +152,12 @@ export class FTextValue {
    * Read an FText. `sizeHint` is the byte budget when called as a top-level
    * TextProperty value or inside a finite-budget container; pass `Infinity`
    * when reading inside a self-delimiting context (array element, struct
-   * field) and an unknown historyType cannot be captured.
+   * field) and an unknown `historyType` cannot be captured.
+   *
+   * @param {Cursor} cursor
+   * @param {number} sizeHint
+   * @param {Object} [ctx]
+   * @returns {FTextValue}
    */
   static fromReader(cursor, sizeHint, ctx) {
     const start = cursor.pos();
@@ -366,10 +405,19 @@ export class FTextValue {
   }
 }
 
+/**
+ * Property wrapping an `FTextValue`. When a decode failure occurs in
+ * non-strict mode, `value` is an `OpaqueValue` instead so the surrounding
+ * stream stays aligned.
+ */
 export class TextProperty extends Property {
+  /**
+   * @param {Object} [fields]
+   * @param {PropertyTag} [fields.tag]
+   * @param {FTextValue|OpaqueValue|null} [fields.value=null]
+   */
   constructor({ tag, value = null } = {}) {
     super({ tag });
-    // value is FTextValue OR OpaqueValue (when decode failed under non-strict).
     this.value = value;
   }
 

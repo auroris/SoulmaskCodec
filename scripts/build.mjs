@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 /**
- * Bundle the src/ ES modules into dist/ for non-bundler consumers.
+ * Bundle the src/ ES modules into dist/ for non-bundler consumers, then
+ * regenerate the Markdown docs from JSDoc comments.
  *
  *   dist/wscodec.mjs / .global.js / .cjs               the codec
  *   dist/wscodec-translations.mjs / .global.js / .cjs  the name lookups
+ *   docs/<src tree mirror>.md                          jsdoc -> markdown
  *
  * Each entry is built three ways:
  *   .mjs        bundled ESM  - <script type="module"> / ESM CDN
@@ -14,6 +16,9 @@
  * which tree-shakes; these bundles exist for everyone else. Run via
  * `npm run build`; also runs automatically before `npm publish`.
  */
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 import * as esbuild from 'esbuild';
 
 const bundles = [
@@ -44,4 +49,14 @@ for (const b of bundles) {
     console.log(`  ${outfile}`);
   }
 }
+console.log('bundle complete');
+
+// Regenerate the API docs from JSDoc. Spawn a child process so the
+// jsdoc-to-markdown library's logging and the bundle output don't tangle.
+const docsScript = path.join(path.dirname(fileURLToPath(import.meta.url)), 'build-docs.mjs');
+await new Promise((resolve, reject) => {
+  const child = spawn(process.execPath, [docsScript], { stdio: 'inherit' });
+  child.on('exit', code => code === 0 ? resolve() : reject(new Error(`build-docs exited ${code}`)));
+});
+
 console.log('build complete');

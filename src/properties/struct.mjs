@@ -1,34 +1,33 @@
 /**
- * StructProperty + StructValue + the binary-struct handler registry.
+ * `StructProperty` + `StructValue` + the binary-struct handler registry.
  *
  * A struct on the wire is one of two forms:
  *
- *   "binary"     — well-known UE struct (Vector, Quat, FColor, etc.) with
- *                  a fixed-layout binary record. Handler reads/writes a
- *                  plain object (e.g. {x, y, z}) directly.
- *
- *   "propStream" — unknown or property-tagged struct: a nested
- *                  PropertyStream terminated by None. Always falls through
- *                  to here when no handler is registered; ALSO selected for
- *                  known-binary structs when the peek heuristic says the
- *                  next bytes are a PropertyTag (Soulmask encodes some
- *                  known-binary structs as tagged streams inside Map struct
- *                  values, which would otherwise be misread as raw records).
- *
- *   "decodeError" — non-strict-mode fallback when the propStream read
- *                  throws mid-decode. Captures the remaining tail bytes as
- *                  opaque so the surrounding stream stays aligned.
+ * - `"binary"`     - well-known UE struct (Vector, Quat, FColor, etc.) with
+ *   a fixed-layout binary record. Handler reads/writes a plain object
+ *   (e.g. `{x, y, z}`) directly.
+ * - `"propStream"` - unknown or property-tagged struct: a nested
+ *   PropertyStream terminated by None. Always falls through to here when
+ *   no handler is registered; ALSO selected for known-binary structs when
+ *   the peek heuristic says the next bytes are a PropertyTag (Soulmask
+ *   encodes some known-binary structs as tagged streams inside Map struct
+ *   values, which would otherwise be misread as raw records).
+ * - `"decodeError"` - non-strict-mode fallback when the propStream read
+ *   throws mid-decode. Captures the remaining tail bytes as opaque so the
+ *   surrounding stream stays aligned.
  *
  * The same `StructValue` class is used both as `StructProperty.value` and
  * as the element type of `ArrayProperty<StructProperty>` / the value side
  * of `MapProperty<_, StructProperty>`.
  *
  * FColor wire order is B, G, R, A (not R, G, B, A). This matches UE4's
- * FColor::Serialize, where the in-memory union exposes the bytes in BGRA
+ * `FColor::Serialize`, where the in-memory union exposes the bytes in BGRA
  * order to match Windows DIB / DirectX texture layout.
  *
  * 64-bit integers (DateTime, Timespan) are exchanged as decimal strings;
  * `Writer.writeInt64` accepts string/BigInt/safe-integer-Number.
+ *
+ * @module wscodec/properties/struct
  */
 
 import { Property, registerProperty, warnOrThrow } from '../property.mjs';
@@ -38,6 +37,16 @@ import { FGuid } from '../primitives.mjs';
 import { b64encode, b64decode } from '../base64.mjs';
 
 // ── STRUCT_HANDLERS registry ────────────────────────────────────────────────
+
+/**
+ * Wire handlers for well-known UE binary structs. Each entry is a
+ * `{ read(cursor), write(writer, value) }` pair.
+ *
+ * Register or replace entries via `registerStructHandler` rather than
+ * mutating this object directly.
+ *
+ * @type {Object<string, {read: function(Cursor): *, write: function(Writer, *): void}>}
+ */
 export const STRUCT_HANDLERS = {
   Vector:      { read: c => ({ x: c.readFloat32(), y: c.readFloat32(), z: c.readFloat32() }),
                  write: (w, v) => { w.writeFloat32(v.x); w.writeFloat32(v.y); w.writeFloat32(v.z); } },
@@ -78,9 +87,13 @@ export const STRUCT_HANDLERS = {
 
 /**
  * Register (or replace) a struct handler. Use this rather than mutating
- * STRUCT_HANDLERS directly; this validates handler shape. Without a
+ * `STRUCT_HANDLERS` directly; this validates handler shape. Without a
  * handler, an unknown struct name falls through to the property-stream
  * path.
+ *
+ * @param {string} name - Struct name as it appears in the property tag (e.g. `"Vector"`).
+ * @param {{read: Function, write: Function}} handler - `{ read(cursor), write(writer, value) }`.
+ * @throws {TypeError} If `name` is empty or `handler` is malformed.
  */
 export function registerStructHandler(name, handler) {
   if (typeof name !== 'string' || name.length === 0) {
@@ -93,7 +106,23 @@ export function registerStructHandler(name, handler) {
 }
 
 // ── StructValue ─────────────────────────────────────────────────────────────
+
+/**
+ * Decoded struct value. The `form` field discriminates between
+ * `"binary"`, `"propStream"`, and `"decodeError"`; only the matching
+ * payload field (`binaryValue` / `stream` / `decodeError` + `opaqueTail`)
+ * is populated.
+ */
 export class StructValue {
+  /**
+   * @param {string} structName - Struct name from the surrounding tag.
+   * @param {Object} [fields]
+   * @param {'binary'|'propStream'|'decodeError'|null} [fields.form=null]
+   * @param {*} [fields.binaryValue=null] - Plain JS value when `form === 'binary'`.
+   * @param {PropertyStream|null} [fields.stream=null] - Nested stream when `form === 'propStream'`.
+   * @param {string|null} [fields.decodeError=null] - Error message when `form === 'decodeError'`.
+   * @param {Uint8Array|null} [fields.opaqueTail=null] - Verbatim bytes captured on a `'decodeError'`.
+   */
   constructor(structName, {
     form = null,
     binaryValue = null,
@@ -111,13 +140,22 @@ export class StructValue {
     this.opaqueTail = opaqueTail;
   }
 
+  /** @returns {boolean} True iff a binary handler is registered for this struct name. */
   get isKnownBinary() { return STRUCT_HANDLERS[this.structName] != null; }
 
   /**
    * Read a struct value. `peekTagged` controls whether the peek heuristic
-   * is consulted before dispatching to a registered binary handler — used
+   * is consulted before dispatching to a registered binary handler - used
    * inside Map<_,Struct> value reads where Soulmask encodes some
    * known-binary structs as tagged streams.
+   *
+   * @param {Cursor} cursor
+   * @param {string} structName
+   * @param {number} sizeHint - Byte budget for this value. Pass `Infinity` when the caller has no bound.
+   * @param {Object} [ctx]
+   * @param {Object} [opts]
+   * @param {boolean} [opts.peekTagged=false] - If true, consult `peekLooksLikePropertyTag` before using a binary handler.
+   * @returns {StructValue}
    */
   static fromReader(cursor, structName, sizeHint, ctx, { peekTagged = false } = {}) {
     const handler = STRUCT_HANDLERS[structName];
@@ -149,9 +187,14 @@ export class StructValue {
   }
 
   /**
-   * Read a struct value WITHOUT consulting STRUCT_HANDLERS (always uses
+   * Read a struct value WITHOUT consulting `STRUCT_HANDLERS` (always uses
    * the property-stream path). Used by Map<Struct,Struct> entry values
    * once the peek heuristic has decided the bytes are tagged.
+   *
+   * @param {Cursor} cursor
+   * @param {string} structName
+   * @param {Object} [ctx]
+   * @returns {StructValue}
    */
   static fromReaderTagged(cursor, structName, ctx) {
     const stream = PropertyStream.fromReader(cursor, Infinity, { ctx });
@@ -232,7 +275,16 @@ export class StructValue {
 }
 
 // ── StructProperty ──────────────────────────────────────────────────────────
+
+/**
+ * Property wrapping a `StructValue`.
+ */
 export class StructProperty extends Property {
+  /**
+   * @param {Object} [fields]
+   * @param {PropertyTag} [fields.tag]
+   * @param {StructValue|null} [fields.value=null]
+   */
   constructor({ tag, value = null } = {}) {
     super({ tag });
     this.value = value;  // StructValue

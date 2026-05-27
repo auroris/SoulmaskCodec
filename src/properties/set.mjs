@@ -1,23 +1,25 @@
 /**
- * SetProperty: homogeneous unordered collection with a "removed" list
+ * `SetProperty`: homogeneous unordered collection with a "removed" list
  * preceding the active entries.
  *
- * Wire layout: [int32 NumRemoved] [removed...] [int32 NumElements] [elements...]
+ * Wire layout: `[int32 NumRemoved] [removed...] [int32 NumElements] [elements...]`
  *
- * Set element shapes match ArrayProperty's element shapes for non-Struct
+ * Set element shapes match `ArrayProperty`'s element shapes for non-Struct
  * inner types and are read/written via the shared element-codec. For
- * StructProperty inner type, elements are EITHER raw 16-byte FGuids (the
+ * `StructProperty` inner type, elements are EITHER raw 16-byte FGuids (the
  * common case across Soulmask saves) OR a nested property stream (mirrors
  * Map<Struct, _> key disambiguation; no Set<Struct> property-stream case
  * has been observed in saves but the codec stays robust against one).
- * The two are distinguished by peeking with `peekLooksLikePropertyTag` —
+ * The two are distinguished by peeking with `peekLooksLikePropertyTag` -
  * random FGuid bytes effectively never satisfy the identifier-FString
  * test, so this peek is safe.
  *
- * Set<ObjectProperty> isn't exercised by observed Soulmask data; the
+ * `Set<ObjectProperty>` isn't exercised by observed Soulmask data; the
  * element-codec dispatches with `Infinity` sizeHint in that case, which
  * is approximate but should work for the standard wire shape (kind +
  * path + optional classPath).
+ *
+ * @module wscodec/properties/set
  */
 
 import { Property, registerProperty } from '../property.mjs';
@@ -27,7 +29,17 @@ import { peekLooksLikePropertyTag } from '../property-stream.mjs';
 import { StructValue } from './struct.mjs';
 import { readElement, writeElement, elementToJSON, elementFromJSON } from '../element-codec.mjs';
 
+/**
+ * Property wrapping a set (with a separate "removed" list). The on-wire
+ * order of elements is preserved on `this.elements`.
+ */
 export class SetProperty extends Property {
+  /**
+   * @param {Object} [fields]
+   * @param {PropertyTag} [fields.tag]
+   * @param {Array<*>} [fields.removed=[]] - Removed keys (shape matches `elements`).
+   * @param {Array<*>} [fields.elements=[]] - Active entries.
+   */
   constructor({ tag, removed = [], elements = [] } = {}) {
     super({ tag });
     this.removed = removed;

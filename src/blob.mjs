@@ -1,19 +1,21 @@
 /**
  * UnrealBlob: top-level entry point for the wscodec.
  *
- *   UnrealBlob.fromBytes(u8, opts)   → parse uncompressed property-stream bytes
- *   blob.toBytes()                   → re-encode to bytes
- *   UnrealBlob.fromJSON(j)           → reconstruct from a structured JSON tree
- *   blob.toJSON()                    → produce a JSON-safe tree
- *   UnrealBlob.fromJSONString(s)     → parse + reconstruct from a JSON string
+ *   UnrealBlob.fromBytes(u8, opts)   -> parse uncompressed property-stream bytes
+ *   blob.toBytes()                   -> re-encode to bytes
+ *   UnrealBlob.fromJSON(j)           -> reconstruct from a structured JSON tree
+ *   blob.toJSON()                    -> produce a JSON-safe tree
+ *   UnrealBlob.fromJSONString(s)     -> parse + reconstruct from a JSON string
  *                                      (handles -0 / NaN / Infinity via sentinels)
- *   blob.toJSONString(indent)        → stringify with sentinel substitution
+ *   blob.toJSONString(indent)        -> stringify with sentinel substitution
  *
  * Wire layout (bytes accepted by `fromBytes` and produced by `toBytes`):
+ *
  *   [0..3]   u32 LE   versionTag = 0x00000002
  *   [4..]    FPropertyTag stream terminated by "None" + int32 0 trailer
  *
  * Soulmask actor_data envelope (handled OUTSIDE this library):
+ *
  *   [0..3]   u32 LE       outer version tag = 0x00000002
  *   [4..]    LZ4 block    size-prefixed; decompresses to the bytes above.
  *
@@ -27,6 +29,8 @@
  * unimplemented FText historyType, delegate property family) throws
  * instead of warning + capturing bytes. Default behavior is to warn via
  * `console.warn` and keep going.
+ *
+ * @module wscodec/blob
  */
 
 import { Cursor, Writer } from './io.mjs';
@@ -50,32 +54,62 @@ import './properties/delegate.mjs';
 
 const NAME = 'unreal-properties';
 const VERSION_HEADER_SIZE = 4;
+
+/**
+ * Wire format DataVersion. Always the first 4 bytes (little-endian) of an
+ * uncompressed blob.
+ *
+ * @type {number}
+ */
 export const VERSION_TAG = 0x00000002;
 
+/**
+ * Top-level container for a decoded property stream. Use `UnrealBlob.fromBytes`
+ * to parse uncompressed bytes and `blob.toBytes()` to re-encode.
+ */
 export class UnrealBlob {
+  /**
+   * @param {Object} [fields]
+   * @param {number} [fields.versionTag=VERSION_TAG] - 4-byte wire header value.
+   * @param {PropertyStream} [fields.stream] - Decoded property stream (defaults to empty).
+   * @param {Uint8Array|null} [fields.bodyTrailing=null] - Any unconsumed bytes after the stream terminator. Preserved verbatim.
+   */
   constructor({ versionTag = VERSION_TAG, stream = null, bodyTrailing = null } = {}) {
     this.versionTag = versionTag;
     this.stream = stream ?? new PropertyStream({ properties: [], terminated: false });
     this.bodyTrailing = bodyTrailing;
   }
 
-  /** Codec-adapter name. Matches the `name` field on the bare `codec` export. */
+  /**
+   * Codec-adapter name. Matches the `name` field on the bare `codec` export.
+   *
+   * @returns {string} The constant `'unreal-properties'`.
+   */
   get kind() { return NAME; }
 
   /**
    * Convenience accessor for the top-level property list. Equivalent to
-   * `this.stream.properties` — exposes the canonical place to add/remove
+   * `this.stream.properties` - exposes the canonical place to add/remove
    * properties at the top level.
+   *
+   * @returns {Array<Property>} Top-level properties.
    */
   get properties() { return this.stream.properties; }
 
-  /** True iff the property stream was successfully terminated by a None tag. */
+  /**
+   * True iff the property stream was successfully terminated by a None tag.
+   *
+   * @returns {boolean}
+   */
   get terminated() { return this.stream.terminated; }
 
   /**
    * First TOP-LEVEL property with the given tag name, or null. Does NOT
    * traverse into embedded streams, struct values, array elements, or map
-   * entries — use `findPropertyDeep` for that.
+   * entries - use `findPropertyDeep` for that.
+   *
+   * @param {string} propName - Tag name to search for.
+   * @returns {Property|null} Match or null.
    */
   findProperty(propName) {
     for (const p of this.stream.properties) {
@@ -87,11 +121,15 @@ export class UnrealBlob {
   /**
    * Depth-first search for the first property with the given tag name,
    * anywhere in the tree. Walks:
-   *   - top-level properties
-   *   - ObjectRef.embedded (PropertyStream)
-   *   - StructValue's propStream form
-   *   - ArrayProperty / SetProperty StructValue elements + ObjectRef embeddeds
-   *   - MapProperty entries: both key (when StructValue) and value
+   *
+   * - top-level properties
+   * - ObjectRef.embedded (PropertyStream)
+   * - StructValue's propStream form
+   * - ArrayProperty / SetProperty StructValue elements + ObjectRef embeddeds
+   * - MapProperty entries: both key (when StructValue) and value
+   *
+   * @param {string} propName - Tag name to search for.
+   * @returns {Property|null} Match or null.
    */
   findPropertyDeep(propName) {
     return _findPropertyDeep(this.stream.properties, propName);
@@ -100,6 +138,9 @@ export class UnrealBlob {
   /**
    * True iff `u8` starts with the wscodec wire header. Cheap header sniff;
    * doesn't validate the rest of the structure.
+   *
+   * @param {Uint8Array} u8 - Bytes to test.
+   * @returns {boolean}
    */
   static detect(u8) {
     if (!u8 || u8.length < VERSION_HEADER_SIZE) return false;
@@ -113,6 +154,12 @@ export class UnrealBlob {
    * `opts.strict` flag additionally escalates every opaque-fallback site
    * (unknown property type, FText unknown historyType, etc.) into a thrown
    * Error rather than a warn-and-capture.
+   *
+   * @param {Uint8Array} u8 - Uncompressed property-stream bytes.
+   * @param {Object} [opts]
+   * @param {boolean} [opts.strict=false] - Escalate opaque fallbacks into thrown errors.
+   * @returns {UnrealBlob}
+   * @throws {Error} If the header is wrong, the structure is invalid, or strict mode trips on an unknown shape.
    */
   static fromBytes(u8, opts = {}) {
     if (!UnrealBlob.detect(u8)) {
@@ -143,6 +190,8 @@ export class UnrealBlob {
   /**
    * Re-encode this blob to bytes. Always recomputes every tag size from
    * actually-encoded value bytes; there is no pass-through path.
+   *
+   * @returns {Uint8Array} The encoded blob.
    */
   toBytes() {
     const w = new Writer(this.bodyTrailing ? 256 + this.bodyTrailing.length : 256);
@@ -154,6 +203,13 @@ export class UnrealBlob {
     return w.finalize();
   }
 
+  /**
+   * Produce a JSON-safe tree representation. Bytes (e.g. `bodyTrailing`)
+   * are base64-encoded; non-finite numbers must additionally be guarded
+   * with `jsonReplacer` at stringify time.
+   *
+   * @returns {Object} JSON tree.
+   */
   toJSON() {
     const j = {
       versionTag: this.versionTag,
@@ -165,6 +221,12 @@ export class UnrealBlob {
     return j;
   }
 
+  /**
+   * Reconstruct a blob from a JSON tree produced by `toJSON`.
+   *
+   * @param {Object} j - JSON tree.
+   * @returns {UnrealBlob}
+   */
   static fromJSON(j) {
     return new UnrealBlob({
       versionTag: j.versionTag,
@@ -173,18 +235,32 @@ export class UnrealBlob {
     });
   }
 
-  /** Stringify with -0 / NaN / Infinity preserved via sentinel substitution. */
+  /**
+   * Stringify with -0 / NaN / Infinity preserved via sentinel substitution.
+   *
+   * @param {number|string} [indent] - Forwarded to `JSON.stringify`.
+   * @returns {string}
+   */
   toJSONString(indent) { return JSON.stringify(this.toJSON(), jsonReplacer, indent); }
 
-  /** Parse + reconstruct, undoing the sentinel substitution. */
+  /**
+   * Parse + reconstruct, undoing the sentinel substitution.
+   *
+   * @param {string} s - JSON string produced by `toJSONString`.
+   * @returns {UnrealBlob}
+   */
   static fromJSONString(s) { return UnrealBlob.fromJSON(JSON.parse(s, jsonReviver)); }
 }
 
-// ── Codec-adapter shape (name + detect + decode + encode) ───────────────────
-// Suitable for plugging into a registry that dispatches codecs by `name`.
-// Operates on the uncompressed bytes that `UnrealBlob.fromBytes` accepts;
-// callers reading Soulmask's actor_data column directly wrap this with the
-// column's outer LZ4 envelope.
+/**
+ * Codec-adapter shape (`{ name, detect, decode, encode }`). Suitable for
+ * plugging into a registry that dispatches codecs by `name`. Operates on
+ * the uncompressed bytes that `UnrealBlob.fromBytes` accepts; callers
+ * reading Soulmask's `actor_data` column directly wrap this with the
+ * column's outer LZ4 envelope.
+ *
+ * @type {{name: string, detect: function(Uint8Array): boolean, decode: function(Uint8Array): UnrealBlob, encode: function(UnrealBlob): Uint8Array}}
+ */
 export const codec = {
   name: NAME,
   detect: u8 => UnrealBlob.detect(u8),
@@ -212,6 +288,10 @@ const NAN_SENTINEL      = ' __wscodec_nan__ ';
  * NaN. Pass this to any `JSON.stringify` call that may contain
  * wscodec-derived numbers (including a blob nested inside a larger
  * envelope). Use `jsonReviver` on the matching `JSON.parse` to invert.
+ *
+ * @param {string} _key - Property key (unused).
+ * @param {*} value - Value being serialized.
+ * @returns {*} Sentinel string for -0/Infinity/NaN, otherwise the value unchanged.
  */
 export function jsonReplacer(_key, value) {
   if (typeof value !== 'number') return value;
@@ -222,7 +302,13 @@ export function jsonReplacer(_key, value) {
   return value;
 }
 
-/** Inverse of `jsonReplacer`. Pass to `JSON.parse(text, jsonReviver)`. */
+/**
+ * Inverse of `jsonReplacer`. Pass to `JSON.parse(text, jsonReviver)`.
+ *
+ * @param {string} _key - Property key (unused).
+ * @param {*} value - Value being revived.
+ * @returns {*} -0/Infinity/NaN when the value is a known sentinel, otherwise unchanged.
+ */
 export function jsonReviver(_key, value) {
   if (typeof value !== 'string') return value;
   switch (value) {
