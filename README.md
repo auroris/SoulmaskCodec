@@ -2,12 +2,11 @@
 
 Pure-JS toolkit for Soulmask save files. The core is a codec for `actor_data`
 property streams in Soulmask's `world.db` (Unreal Engine 4.27 `FPropertyTag`
-wire format). Around that core sits a growing set of scripts for dumping,
-editing, and re-importing whole saves.
+wire format). 
 
-- Zero runtime dependencies in the codec itself (`src/`).
-- Round-trip byte-identical against every actor in test saves (run `npm test`
-  with your own `world.db` to verify).
+- Zero runtime dependencies in the codec (`src/`).
+- Round-trip byte-identical against every actor in test saves (run 
+  `npm test -- "path/to/world.db"`).
 - Decode bytes to JS objects, edit, re-encode. Or convert to/from JSON for
   text-based editing and diffing.
 - Optional translation tables map Soulmask's internal class names and IDs to
@@ -30,7 +29,7 @@ loaders can pull `wscodec.global.js` (window globals) or `wscodec.mjs`
 
 ## How to use
 
-The whole codec hangs off one class:
+UnrealBlob serves as your entry point.
 
 ```js
 import { UnrealBlob } from 'wscodec';
@@ -44,22 +43,61 @@ const deepHit  = blob.findPropertyDeep('RongQiCunQuRiZhiData');
 
 // Edit in place. Strings, numbers, ObjectRefs, arrays, maps all map to plain
 // JS values you can mutate directly.
-nameProp.value.displayString = "Claude's Cabinet";
+nameProp.value.displayString = "Auroris' Cabinet";
 
 // Re-encode. Tag sizes are recomputed from the actual encoded value bytes,
 // so any structural edit is safe.
 const newBytes = blob.toBytes();
 ```
 
-JSON is supported as an interchange format. `-0`, `Infinity`, and `NaN` survive
-because the helpers substitute sentinel strings on the way out and restore them
-on the way in:
+`fromBytes` accepts a second argument: pass `{ strict: true }` to
+escalate opaque-fallback warnings (unknown property type, unfamiliar
+FText history, delegate families, etc.) into thrown errors instead of
+the default `console.warn` + capture-as-raw-bytes behavior.
 
 ```js
-const json = blob.toJSONString(2);                 // pretty
+const blob = UnrealBlob.fromBytes(uncompressedBytes, { strict: true });
+```
+
+JSON is supported as an interchange format. Sentinel strings are used to
+preserve `-0`, `Infinity`, and `NaN`.
+
+```js
+const json = blob.toJSONString(2);                 // 2-space indent
 const back = UnrealBlob.fromJSONString(json);      // reconstruct
 back.toBytes();                                    // re-encodes byte-identical
 ```
+
+The argument to `toJSONString` is forwarded to `JSON.stringify` as its
+`space` parameter: omit it (or pass `0`) for compact single-line output,
+pass `1`–`10` for that many spaces per level, or pass a string like
+`"\t"` to indent with that exact string.
+
+### From a browser without a bundler
+
+`dist/wscodec.global.js` is an IIFE bundle that exposes everything on
+`window.wscodec`. Load it with a classic `<script>` tag — unpkg and
+jsDelivr serve it directly from the npm package:
+
+```html
+<script src="https://unpkg.com/wscodec"></script>
+<script>
+  const blob = wscodec.UnrealBlob.fromBytes(uncompressedBytes);
+  // window.wscodec re-exports the same surface as the ESM build.
+</script>
+```
+
+Translations ship as a separate bundle on `window.wscodecTranslations`:
+
+```html
+<script src="https://unpkg.com/wscodec/dist/wscodec-translations.global.js"></script>
+<script>
+  wscodecTranslations.item('/Game/Blueprints/.../BP_WuQi_Dao_2_C');
+</script>
+```
+
+For `<script type="module">`, point at `dist/wscodec.mjs` and use the
+same `import { UnrealBlob } from '...'` syntax shown above.
 
 ### The actor_data envelope
 
@@ -71,8 +109,8 @@ back.toBytes();                                    // re-encodes byte-identical
 [4..]   LZ4 block   decompresses to the bytes fromBytes accepts
 ```
 
-The codec stays out of compression so it can stay dependency-free. Wrap it
-with whatever LZ4 you prefer (the scripts use `lz4-wasm-nodejs`):
+When loading rows from world.db, use your favorite LZ4 decompresser
+(I like to use `lz4-wasm-nodejs`):
 
 ```js
 import { UnrealBlob } from 'wscodec';
@@ -92,8 +130,7 @@ round-trip tests check equality.
 
 ### Translations
 
-Optional name lookups for the IDs and class names the codec returns. Shipped
-as a separate import so a codec-only install pays nothing for it:
+Optional name lookups for the IDs and class names Soulmask uses:
 
 ```js
 import { translate, item, npc, recipe } from 'wscodec/translations';
@@ -117,9 +154,8 @@ The tables are generated from the game's data export and committed in
 
 ## Scripts
 
-End-to-end utilities that wrap the codec. All take a `world.db` path as the
-first argument. The ones that write files default the output path next to the
-input.
+Utilities and tests. All take a `world.db` path as the first argument. The ones 
+that write files default the output path next to the input.
 
 | Script | What it does |
 | ------ | ------------ |
@@ -133,25 +169,20 @@ input.
 | `node scripts/build.mjs` (`npm run build`) | Build the `dist/` bundles via esbuild. Runs automatically on `npm publish`. |
 | `node scripts/build-translations.mjs` (`npm run build-translations`) | Regenerate `src/translations.data.mjs` from the CSV export in `ext/` (see below). |
 
-The `test-edit-*.mjs` scripts in `scripts/` are end-to-end edit recipes
+The `test-edit-*.mjs` scripts in `scripts/` are edit recipes
 against specific in-game objects (a named chest, a specific NPC's log,
-a wall). They served as the fixtures for verifying round-trip writes
-preserved their changes after re-import. Useful as templates for your
-own edits; see the file headers for the expected before/after.
+a wall). Useful as templates for your own edits; see the file headers 
+for the expected before/after.
 
 ### Regenerating translations
 
-The translation tables ship pre-generated in `src/translations.data.mjs`,
-so a normal install/build doesn't need anything in `ext/`. To rebuild from
-a fresh game patch:
+The translation tables ship pre-generated in `src/translations.data.mjs`
+To rebuild from a fresh game patch:
 
 1. Generate the CSV export with
    [SoulmaskDataMiner](https://github.com/auroris/SoulmaskDataMiner).
 2. Drop the export into `ext/` at the repo root (gitignored).
 3. Run `npm run build-translations`.
-
-`ext/` is not bundled in this repo; it's raw extracted data sized in the
-hundreds of MB.
 
 ## Tests
 
@@ -166,7 +197,8 @@ npm run test:json-spot      # JSON round-trip on representative rows
 npm run test:json-full      # JSON round-trip on every row
 npm run test:dump-logs      # exercise the log dumper end-to-end
 
-# Pass a save explicitly:
+# Pass a save explicitly (note the `--` so npm forwards the arg):
+npm test -- /path/to/world.db
 node test/test-roundtrip.mjs /path/to/world.db
 ```
 
@@ -174,8 +206,7 @@ node test/test-roundtrip.mjs /path/to/world.db
 `actor_data` row, re-encodes via `toBytes()`, and reports the first byte
 of divergence (with surrounding context) for any row that doesn't match.
 `test:json-full` does the same end-to-end through the JSON layer. Decode
-failures are bucketed by error pattern so identical bugs collapse to one
-line in the report.
+failures are bucketed by error pattern so identical bugs can be identified.
 
 Exit code is non-zero if any decode failure, encode failure, or round-trip
 mismatch is found.
