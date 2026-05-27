@@ -47,7 +47,8 @@
     "test:json-full": "node test/test-json-full.mjs",
     "test:dump-logs": "node scripts/dump-logs.mjs",
     "export-db": "node scripts/db-to-json.mjs",
-    "import-db": "node --max-old-space-size=4096 scripts/json-to-db.mjs"
+    "import-db": "node --max-old-space-size=4096 scripts/json-to-db.mjs",
+    "update": "npx npm-check-updates -u && npm install"
   },
   "keywords": [
     "soulmask",
