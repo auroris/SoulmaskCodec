@@ -7,8 +7,11 @@
  * is no per-element tag wrapper. This module is the single place that
  * encoding lives.
  *
- *   readElement  / writeElement       — wire bytes
- *   elementToJSON / elementFromJSON   — JSON form
+ * One handler table (`ELEMENT_CODECS`) per inner type provides
+ * `{ read, write, toJSON, fromJSON }`; the four exported dispatch
+ * functions just look up and call. Aliases (Enum→Name, Class/Weak/
+ * Lazy/WS→Object, SoftClass→SoftObject) share the same handler so
+ * there is no chance of one accessor drifting from another.
  *
  * `StructProperty` inner type is NOT handled here, because the three
  * containers differ in what they do with structs:
@@ -35,128 +38,101 @@ import { SoftObjectRef } from './properties/soft-object.mjs';
 import { FTextValue } from './properties/text.mjs';
 import { OpaqueValue } from './properties/opaque.mjs';
 
-export function readElement(cursor, innerType, sizeHint, ctx) {
-  switch (innerType) {
-    case 'IntProperty':    return cursor.readInt32();
-    case 'Int8Property':   return cursor.readInt8();
-    case 'Int16Property':  return cursor.readInt16();
-    case 'Int64Property':  return cursor.readInt64().toString();
-    case 'UInt16Property': return cursor.readUint16();
-    case 'UInt32Property': return cursor.readUint32();
-    case 'UInt64Property': return cursor.readUint64().toString();
-    case 'FloatProperty':  return cursor.readFloat32();
-    case 'DoubleProperty': return cursor.readFloat64();
-    case 'BoolProperty':   return cursor.readUint8() !== 0;
-    case 'ByteProperty':   return cursor.readUint8();
-    case 'EnumProperty':
-    case 'NameProperty':   return FName.fromReader(cursor);
-    case 'StrProperty':    return cursor.readFString().value;
-    case 'TextProperty':   return FTextValue.fromReader(cursor, Infinity, ctx);
-    case 'ObjectProperty':
-    case 'ClassProperty':
-    case 'WeakObjectProperty':
-    case 'LazyObjectProperty':
-    case 'WSObjectProperty':
-      return ObjectRef.fromReaderArrayElement(cursor, sizeHint, ctx);
-    case 'SoftObjectProperty':
-    case 'SoftClassProperty':
-      return SoftObjectRef.fromReader(cursor);
-    default:
-      throw new Error(`element-codec: unsupported innerType '${innerType}'`);
-  }
+const identity = v => v;
+const toJSONCall = v => v.toJSON();
+
+const ELEMENT_CODECS = {
+  IntProperty:    { read: c => c.readInt32(),               write: (w, v) => w.writeInt32(v),   toJSON: identity, fromJSON: identity },
+  Int8Property:   { read: c => c.readInt8(),                write: (w, v) => w.writeInt8(v),    toJSON: identity, fromJSON: identity },
+  Int16Property:  { read: c => c.readInt16(),               write: (w, v) => w.writeInt16(v),   toJSON: identity, fromJSON: identity },
+  Int64Property:  { read: c => c.readInt64().toString(),    write: (w, v) => w.writeInt64(v),   toJSON: identity, fromJSON: j => String(j) },
+  UInt16Property: { read: c => c.readUint16(),              write: (w, v) => w.writeUint16(v),  toJSON: identity, fromJSON: identity },
+  UInt32Property: { read: c => c.readUint32(),              write: (w, v) => w.writeUint32(v),  toJSON: identity, fromJSON: identity },
+  UInt64Property: { read: c => c.readUint64().toString(),   write: (w, v) => w.writeUint64(v),  toJSON: identity, fromJSON: j => String(j) },
+  FloatProperty:  { read: c => c.readFloat32(),             write: (w, v) => w.writeFloat32(v), toJSON: identity, fromJSON: identity },
+  DoubleProperty: { read: c => c.readFloat64(),             write: (w, v) => w.writeFloat64(v), toJSON: identity, fromJSON: identity },
+  BoolProperty:   { read: c => c.readUint8() !== 0,         write: (w, v) => w.writeUint8(v ? 1 : 0), toJSON: identity, fromJSON: identity },
+  ByteProperty:   { read: c => c.readUint8(),               write: (w, v) => w.writeUint8(v),   toJSON: identity, fromJSON: identity },
+  StrProperty:    { read: c => c.readFString().value,       write: (w, v) => w.writeFString(v), toJSON: identity, fromJSON: identity },
+
+  NameProperty:   {
+    read:     c       => FName.fromReader(c),
+    write:    (w, v)  => FName.from(v).toBytes(w),
+    toJSON:   toJSONCall,
+    fromJSON: j       => FName.from(j),
+  },
+
+  TextProperty: {
+    read:     (c, _s, ctx) => FTextValue.fromReader(c, Infinity, ctx),
+    // OpaqueValue carry-through is a non-strict fallback; FTextValue is
+    // the structured path. Both expose toBytes.
+    write:    (w, v) => v.toBytes(w),
+    toJSON:   toJSONCall,
+    fromJSON: j      => FTextValue.fromJSON(j),
+  },
+
+  ObjectProperty: {
+    read:    (c, sizeHint, ctx) => ObjectRef.fromReaderArrayElement(c, sizeHint, ctx),
+    // Variable wire shape (kind-only, +path, +path+classPath, +embedded).
+    // ObjectRef.toBytes decides per-field which to emit based on which
+    // fields were on the wire at read time. A bare-string fallback
+    // covers programmatic construction with a path only.
+    write:   (w, v) => {
+      if (v instanceof ObjectRef) { v.toBytes(w); return; }
+      w.writeUint8(0x03);
+      w.writeFString(v ?? '');
+    },
+    toJSON:   toJSONCall,
+    fromJSON: j => ObjectRef.fromJSON(j),
+  },
+
+  SoftObjectProperty: {
+    read:     c       => SoftObjectRef.fromReader(c),
+    write:    (w, v)  => (v instanceof SoftObjectRef ? v : new SoftObjectRef(v)).toBytes(w),
+    toJSON:   toJSONCall,
+    fromJSON: j       => SoftObjectRef.fromJSON(j),
+  },
+};
+
+// Aliases — identical wire shape, different declared type name in the
+// outer property tag. Sharing the codec object means a fix to one applies
+// to all.
+ELEMENT_CODECS.EnumProperty        = ELEMENT_CODECS.NameProperty;
+ELEMENT_CODECS.ClassProperty       = ELEMENT_CODECS.ObjectProperty;
+ELEMENT_CODECS.WeakObjectProperty  = ELEMENT_CODECS.ObjectProperty;
+ELEMENT_CODECS.LazyObjectProperty  = ELEMENT_CODECS.ObjectProperty;
+ELEMENT_CODECS.WSObjectProperty    = ELEMENT_CODECS.ObjectProperty;
+ELEMENT_CODECS.SoftClassProperty   = ELEMENT_CODECS.SoftObjectProperty;
+
+/**
+ * Inner-type names that resolve to ObjectRef on the wire. Exported so
+ * containers (array.mjs) can branch on object-family without re-listing
+ * the aliases.
+ */
+export const OBJECT_INNER_TYPES = new Set([
+  'ObjectProperty', 'ClassProperty', 'WeakObjectProperty',
+  'LazyObjectProperty', 'WSObjectProperty',
+]);
+
+function codec(innerType) {
+  const c = ELEMENT_CODECS[innerType];
+  if (!c) throw new Error(`element-codec: unsupported innerType '${innerType}'`);
+  return c;
 }
 
-export function writeElement(writer, innerType, value, _ctx) {
-  switch (innerType) {
-    case 'IntProperty':    writer.writeInt32(value);   return;
-    case 'Int8Property':   writer.writeInt8(value);    return;
-    case 'Int16Property':  writer.writeInt16(value);   return;
-    case 'Int64Property':  writer.writeInt64(value);   return;
-    case 'UInt16Property': writer.writeUint16(value);  return;
-    case 'UInt32Property': writer.writeUint32(value);  return;
-    case 'UInt64Property': writer.writeUint64(value);  return;
-    case 'FloatProperty':  writer.writeFloat32(value); return;
-    case 'DoubleProperty': writer.writeFloat64(value); return;
-    case 'BoolProperty':   writer.writeUint8(value ? 1 : 0); return;
-    case 'ByteProperty':   writer.writeUint8(value);   return;
-    case 'EnumProperty':
-    case 'NameProperty':   FName.from(value).toBytes(writer); return;
-    case 'StrProperty':    writer.writeFString(value); return;
-    case 'TextProperty':
-      // OpaqueValue carry-through is a non-strict fallback; FTextValue is
-      // the structured path. Both expose toBytes.
-      value.toBytes(writer); return;
-    case 'ObjectProperty':
-    case 'ClassProperty':
-    case 'WeakObjectProperty':
-    case 'LazyObjectProperty':
-    case 'WSObjectProperty':
-      // Variable wire shape (kind-only, +path, +path+classPath, +embedded).
-      // ObjectRef.toBytes decides per-field which to emit based on which
-      // fields were on the wire at read time. A bare-string fallback
-      // covers programmatic construction with a path only.
-      if (value instanceof ObjectRef) { value.toBytes(writer); return; }
-      writer.writeUint8(0x03);
-      writer.writeFString(value ?? '');
-      return;
-    case 'SoftObjectProperty':
-    case 'SoftClassProperty':
-      (value instanceof SoftObjectRef ? value : new SoftObjectRef(value)).toBytes(writer);
-      return;
-    default:
-      throw new Error(`element-codec: unsupported innerType '${innerType}'`);
-  }
+export function readElement(cursor, innerType, sizeHint, ctx) {
+  return codec(innerType).read(cursor, sizeHint, ctx);
+}
+
+export function writeElement(writer, innerType, value, ctx) {
+  codec(innerType).write(writer, value, ctx);
 }
 
 export function elementToJSON(value, innerType) {
-  switch (innerType) {
-    case 'IntProperty':    case 'Int8Property':   case 'Int16Property':
-    case 'UInt16Property': case 'UInt32Property':
-    case 'FloatProperty':  case 'DoubleProperty':
-    case 'BoolProperty':   case 'ByteProperty':
-      return value;
-    case 'Int64Property':  case 'UInt64Property': return value;     // already string
-    case 'StrProperty':    return value;
-    case 'EnumProperty':
-    case 'NameProperty':   return value.toJSON();
-    case 'TextProperty':   return value.toJSON();
-    case 'ObjectProperty':
-    case 'ClassProperty':
-    case 'WeakObjectProperty':
-    case 'LazyObjectProperty':
-    case 'WSObjectProperty':
-      return value.toJSON();
-    case 'SoftObjectProperty':
-    case 'SoftClassProperty':
-      return value.toJSON();
-    default:
-      throw new Error(`element-codec: unsupported innerType '${innerType}'`);
-  }
+  return codec(innerType).toJSON(value);
 }
 
 export function elementFromJSON(j, innerType) {
   if (OpaqueValue.isOpaqueJSON(j)) return OpaqueValue.fromJSON(j);
-  switch (innerType) {
-    case 'IntProperty':    case 'Int8Property':   case 'Int16Property':
-    case 'UInt16Property': case 'UInt32Property':
-    case 'FloatProperty':  case 'DoubleProperty':
-    case 'BoolProperty':   case 'ByteProperty':
-      return j;
-    case 'Int64Property':  case 'UInt64Property': return String(j);
-    case 'StrProperty':    return j;
-    case 'EnumProperty':
-    case 'NameProperty':   return FName.from(j);
-    case 'TextProperty':   return FTextValue.fromJSON(j);
-    case 'ObjectProperty':
-    case 'ClassProperty':
-    case 'WeakObjectProperty':
-    case 'LazyObjectProperty':
-    case 'WSObjectProperty':
-      return ObjectRef.fromJSON(j);
-    case 'SoftObjectProperty':
-    case 'SoftClassProperty':
-      return SoftObjectRef.fromJSON(j);
-    default:
-      throw new Error(`element-codec: unsupported innerType '${innerType}'`);
-  }
+  return codec(innerType).fromJSON(j);
 }

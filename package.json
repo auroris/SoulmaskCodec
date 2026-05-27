@@ -15,10 +15,6 @@
     },
     "./io": "./src/io.mjs",
     "./primitives": "./src/primitives.mjs",
-    "./structs": "./src/structs.mjs",
-    "./values": "./src/values.mjs",
-    "./properties": "./src/properties.mjs",
-    "./json": "./src/json.mjs",
     "./translations": {
       "import": "./src/translations.mjs",
       "require": "./dist/wscodec-translations.cjs",

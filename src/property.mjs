@@ -19,7 +19,6 @@
  */
 
 import { PropertyTag } from './tag.mjs';
-import { Writer } from './io.mjs';
 
 export const PROPERTY_REGISTRY = {};
 
@@ -92,16 +91,16 @@ export class Property {
   }
 
   /**
-   * Encode the property to the writer. Sub-buffers the value bytes so the
-   * actual size can be computed and written into the tag header, then
-   * concatenates. There is no path that skips re-encoding.
+   * Encode the property to the writer in a single forward pass: emit the
+   * tag (with a placeholder size), write the value bytes directly into
+   * the writer, then patch the size field with the actual value byte
+   * count. No sub-buffer allocation, no double-copy.
    */
   toBytes(writer, ctx = {}) {
-    const sub = new Writer(64);
-    this._writeValue(sub, ctx);
-    const valueBytes = sub.finalize();
-    this.tag.toBytes(writer, valueBytes.length);
-    writer.writeBytes(valueBytes);
+    const sizePos = this.tag.toBytes(writer);
+    const valueStart = writer.pos();
+    this._writeValue(writer, ctx);
+    writer.backpatchInt32(sizePos, writer.pos() - valueStart);
   }
 
   _writeValue(_writer, _ctx) {

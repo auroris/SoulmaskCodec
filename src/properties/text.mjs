@@ -35,6 +35,13 @@
  *       FNumberFormattingOptions = AlwaysSign(uint32) + UseGrouping(uint32) +
  *         RoundingMode(int8) + 4 x int32 digit-count fields.
  *
+ *   HistoryType 11 (StringTableEntry, FTextHistory_StringTableEntry):
+ *       FName   TableId        // Soulmask form: bare FString, no int32 Number
+ *       FString Key
+ *       Soulmask uses this for log entries that reference a centralized
+ *       string table (e.g. GongHuiRiZhiData entries from BetterBonfires
+ *       and other DLC mods).
+ *
  *   All other types: remaining bytes captured in `_raw` for verbatim
  *   round-trip; the codec emits a warn (or throws under strict mode).
  *
@@ -45,6 +52,7 @@
 
 import { Property, registerProperty, warnOrThrow } from '../property.mjs';
 import { PropertyTag } from '../tag.mjs';
+import { FName } from '../primitives.mjs';
 import { OpaqueValue } from './opaque.mjs';
 import { b64encode, b64decode } from '../base64.mjs';
 
@@ -57,6 +65,7 @@ export class FTextValue {
     sourceString, sourceStringIsNull = false,
     sourceFmt, arguments: args,
     sourceValue, formatOptions, culture, cultureIsNull = false,
+    tableId, tableKey, tableKeyIsNull = false,
     _raw,
   } = {}) {
     this.flags = flags;
@@ -82,6 +91,10 @@ export class FTextValue {
       this.formatOptions = formatOptions ?? null;
       this.culture = culture ?? null;
       this.cultureIsNull = cultureIsNull;
+    } else if (historyType === 11) {
+      this.tableId = tableId ?? null;        // FName
+      this.tableKey = tableKey ?? '';        // FString
+      this.tableKeyIsNull = tableKeyIsNull;
     } else {
       this._raw = _raw ?? null;
     }
@@ -97,6 +110,7 @@ export class FTextValue {
       const v = this.sourceValue?.value;
       return v != null ? String(v) : null;
     }
+    if (this.historyType === 11) return this.tableKey || null;
     return null;
   }
 
@@ -179,6 +193,16 @@ export class FTextValue {
         }
         return new FTextValue({ flags, historyType: 4, sourceValue, formatOptions, culture, cultureIsNull });
       }
+      if (historyType === 11) {
+        const tableId = FName.fromReader(cursor);
+        const keyFS = cursor.readFString();
+        return new FTextValue({
+          flags, historyType: 11,
+          tableId,
+          tableKey: keyFS.value,
+          tableKeyIsNull: keyFS.isNull,
+        });
+      }
       // Unknown historyType: capture remaining bytes for verbatim round-trip
       // when a finite size budget is available; otherwise throw so the
       // nearest finite-budget caller can decide whether to fall back to
@@ -244,6 +268,9 @@ export class FTextValue {
       const hasCulture = this.culture != null;
       writer.writeUint32(hasCulture ? 1 : 0);
       if (hasCulture) writer.writeFString(this.culture, null, this.cultureIsNull);
+    } else if (this.historyType === 11) {
+      FName.from(this.tableId).toBytes(writer);
+      writer.writeFString(this.tableKey ?? '', null, this.tableKeyIsNull);
     } else {
       if (this._raw) writer.writeBytes(this._raw);
     }
@@ -282,6 +309,10 @@ export class FTextValue {
       } else {
         j.culture = null;
       }
+    } else if (this.historyType === 11) {
+      j.tableId = this.tableId instanceof FName ? this.tableId.toJSON() : this.tableId;
+      j.tableKey = this.tableKey;
+      if (this.tableKeyIsNull) j.tableKeyIsNull = true;
     } else {
       j._raw = this._raw ? b64encode(this._raw) : null;
     }
@@ -328,6 +359,14 @@ export class FTextValue {
         cultureIsNull: !!j.cultureIsNull,
       });
     }
+    if (ht === 11) {
+      return new FTextValue({
+        flags: j.flags, historyType: 11,
+        tableId: FName.from(j.tableId),
+        tableKey: j.tableKey ?? '',
+        tableKeyIsNull: !!j.tableKeyIsNull,
+      });
+    }
     return new FTextValue({
       flags: j.flags, historyType: ht,
       _raw: j._raw ? b64decode(j._raw) : null,
@@ -354,14 +393,9 @@ export class TextProperty extends Property {
     }
   }
 
-  _writeValue(w) {
-    if (this.value instanceof OpaqueValue) { this.value.toBytes(w); return; }
-    this.value.toBytes(w);
-  }
+  _writeValue(w) { this.value.toBytes(w); }
 
-  _writeJSON(j) {
-    j.value = this.value instanceof OpaqueValue ? this.value.toJSON() : this.value.toJSON();
-  }
+  _writeJSON(j) { j.value = this.value.toJSON(); }
 
   static fromJSON(j) {
     const tag = PropertyTag.fromJSON(j);

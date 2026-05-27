@@ -8,7 +8,7 @@
  *   FString  Type
  *   int32    Size                  // bytes of value data following the tag
  *   int32    ArrayIndex
- *   // type-specific tag data:
+ *   // type-specific tag data (see TAG_EXTRAS):
  *   if Type == "StructProperty":  FString StructName + FGuid StructGuid
  *   if Type == "BoolProperty":    u8 BoolVal
  *   if Type == "ByteProperty":    FString EnumName
@@ -21,6 +21,46 @@
  */
 
 import { FName, FGuid } from './primitives.mjs';
+
+// Per-type extension fields. One entry per Type with a `(tag, cursor)`
+// reader, a `(tag, writer)` writer, and matching JSON encoders. The
+// four switches over `tag.type.value` used to live inline in fromReader
+// / toBytes / toJSON / fromJSON; collapsing them into a single table
+// keeps the wire shape and JSON shape impossible to drift apart.
+const TAG_EXTRAS = {
+  StructProperty: {
+    read:     (tag, c) => { tag.structName = FName.fromReader(c); tag.structGuid = FGuid.fromReader(c); },
+    write:    (tag, w) => { tag.structName.toBytes(w); tag.structGuid.toBytes(w); },
+    toJSON:   (tag, j) => { j.structName = tag.structName.toJSON(); j.structGuid = tag.structGuid.value; },
+    fromJSON: (tag, j) => { tag.structName = FName.from(j.structName); tag.structGuid = j.structGuid ? new FGuid(j.structGuid) : null; },
+  },
+  BoolProperty: {
+    read:     (tag, c) => { tag.boolVal = c.readUint8(); },
+    write:    (tag, w) => { w.writeUint8(tag.boolVal); },
+    toJSON:   (tag, j) => { j.boolVal = tag.boolVal; },
+    fromJSON: (tag, j) => { tag.boolVal = j.boolVal; },
+  },
+  ByteProperty: {
+    read:     (tag, c) => { tag.enumName = FName.fromReader(c); },
+    write:    (tag, w) => { tag.enumName.toBytes(w); },
+    toJSON:   (tag, j) => { j.enumName = tag.enumName.toJSON(); },
+    fromJSON: (tag, j) => { tag.enumName = FName.from(j.enumName); },
+  },
+  ArrayProperty: {
+    read:     (tag, c) => { tag.innerType = FName.fromReader(c); },
+    write:    (tag, w) => { tag.innerType.toBytes(w); },
+    toJSON:   (tag, j) => { j.innerType = tag.innerType.toJSON(); },
+    fromJSON: (tag, j) => { tag.innerType = FName.from(j.innerType); },
+  },
+  MapProperty: {
+    read:     (tag, c) => { tag.innerType = FName.fromReader(c); tag.valueType = FName.fromReader(c); },
+    write:    (tag, w) => { tag.innerType.toBytes(w); tag.valueType.toBytes(w); },
+    toJSON:   (tag, j) => { j.innerType = tag.innerType.toJSON(); j.valueType = tag.valueType.toJSON(); },
+    fromJSON: (tag, j) => { tag.innerType = FName.from(j.innerType); tag.valueType = FName.from(j.valueType); },
+  },
+};
+TAG_EXTRAS.EnumProperty = TAG_EXTRAS.ByteProperty;
+TAG_EXTRAS.SetProperty  = TAG_EXTRAS.ArrayProperty;
 
 export class PropertyTag {
   constructor(fields = {}) {
@@ -53,62 +93,41 @@ export class PropertyTag {
     const arrayIndex = cursor.readInt32();
     const tag = new PropertyTag({ name, type, arrayIndex });
     tag._readSize = size;
-    switch (type.value) {
-      case 'StructProperty': tag.structName = FName.fromReader(cursor); tag.structGuid = FGuid.fromReader(cursor); break;
-      case 'BoolProperty':   tag.boolVal = cursor.readUint8(); break;
-      case 'ByteProperty':
-      case 'EnumProperty':   tag.enumName = FName.fromReader(cursor); break;
-      case 'ArrayProperty':
-      case 'SetProperty':    tag.innerType = FName.fromReader(cursor); break;
-      case 'MapProperty':    tag.innerType = FName.fromReader(cursor); tag.valueType = FName.fromReader(cursor); break;
-    }
+    TAG_EXTRAS[type.value]?.read(tag, cursor);
     tag.hasPropertyGuid = cursor.readUint8() !== 0;
     if (tag.hasPropertyGuid) tag.propertyGuid = FGuid.fromReader(cursor);
     return tag;
   }
 
   /**
-   * Emit the tag bytes. `size` is the byte count of the value payload that
-   * will follow; the caller computes it by encoding the value into a sub-buffer
-   * and measuring.
+   * Emit the tag bytes with a zero placeholder for the `size` field, and
+   * return the absolute writer offset of that placeholder so the caller
+   * can patch it once the value bytes have been written. This lets us
+   * encode a property in a single forward pass — no sub-buffering of the
+   * value just to measure its size.
+   *
+   * Terminator tags have no size field and no further payload; this
+   * returns -1 so the caller can branch (though in practice terminator
+   * tags are emitted directly via `new FName('None').toBytes(writer)` and
+   * don't pass through this method).
    */
-  toBytes(writer, size) {
+  toBytes(writer) {
     this.name.toBytes(writer);
-    if (this.isTerminator) return;
+    if (this.isTerminator) return -1;
     this.type.toBytes(writer);
-    writer.writeInt32(size);
+    const sizePos = writer.pos();
+    writer.writeInt32(0);                  // placeholder; back-patched by caller
     writer.writeInt32(this.arrayIndex);
-    switch (this.type.value) {
-      case 'StructProperty': this.structName.toBytes(writer); this.structGuid.toBytes(writer); break;
-      case 'BoolProperty':   writer.writeUint8(this.boolVal); break;
-      case 'ByteProperty':
-      case 'EnumProperty':   this.enumName.toBytes(writer); break;
-      case 'ArrayProperty':
-      case 'SetProperty':    this.innerType.toBytes(writer); break;
-      case 'MapProperty':    this.innerType.toBytes(writer); this.valueType.toBytes(writer); break;
-    }
+    TAG_EXTRAS[this.type.value]?.write(this, writer);
     writer.writeUint8(this.hasPropertyGuid ? 1 : 0);
     if (this.hasPropertyGuid) this.propertyGuid.toBytes(writer);
+    return sizePos;
   }
 
   toJSON() {
     const j = { name: this.name.toJSON(), type: this.type.toJSON() };
     if (this.arrayIndex) j.arrayIndex = this.arrayIndex;
-    switch (this.type?.value) {
-      case 'StructProperty':
-        j.structName = this.structName.toJSON();
-        j.structGuid = this.structGuid.value;
-        break;
-      case 'BoolProperty':   j.boolVal = this.boolVal; break;
-      case 'ByteProperty':
-      case 'EnumProperty':   j.enumName = this.enumName.toJSON(); break;
-      case 'ArrayProperty':
-      case 'SetProperty':    j.innerType = this.innerType.toJSON(); break;
-      case 'MapProperty':
-        j.innerType = this.innerType.toJSON();
-        j.valueType = this.valueType.toJSON();
-        break;
-    }
+    TAG_EXTRAS[this.type?.value]?.toJSON(this, j);
     if (this.hasPropertyGuid) {
       j.hasPropertyGuid = true;
       j.propertyGuid = this.propertyGuid.value;
@@ -123,21 +142,7 @@ export class PropertyTag {
       arrayIndex: j.arrayIndex || 0,
       hasPropertyGuid: !!j.hasPropertyGuid,
     });
-    switch (tag.type?.value) {
-      case 'StructProperty':
-        tag.structName = FName.from(j.structName);
-        tag.structGuid = j.structGuid ? new FGuid(j.structGuid) : null;
-        break;
-      case 'BoolProperty':   tag.boolVal = j.boolVal; break;
-      case 'ByteProperty':
-      case 'EnumProperty':   tag.enumName = FName.from(j.enumName); break;
-      case 'ArrayProperty':
-      case 'SetProperty':    tag.innerType = FName.from(j.innerType); break;
-      case 'MapProperty':
-        tag.innerType = FName.from(j.innerType);
-        tag.valueType = FName.from(j.valueType);
-        break;
-    }
+    TAG_EXTRAS[tag.type?.value]?.fromJSON(tag, j);
     if (tag.hasPropertyGuid) tag.propertyGuid = j.propertyGuid ? new FGuid(j.propertyGuid) : null;
     return tag;
   }

@@ -70,16 +70,6 @@ function renderText(t) {
   }
 }
 const findP = (props, name) => Array.isArray(props) ? props.find(p => p.tag.name?.value === name) : null;
-function findPropDeep(props, target) {
-  if (!Array.isArray(props)) return null;
-  for (const p of props) {
-    if (p.tag.name?.value === target) return p;
-    const v = p.value;
-    if (Array.isArray(v?.embedded)) { const h = findPropDeep(v.embedded, target); if (h) return h; }
-    if (v?._structName && Array.isArray(v.value)) { const h = findPropDeep(v.value, target); if (h) return h; }
-  }
-  return null;
-}
 
 const db = new Database(dbPath, { readonly: true });
 const rows = db.prepare('SELECT actor_serial, actor_script, actor_transf, actor_data FROM actor_table').all();
@@ -90,24 +80,23 @@ for (const row of rows) {
   const u8 = new Uint8Array(row.actor_data.buffer, row.actor_data.byteOffset, row.actor_data.byteLength);
   if (new DataView(u8.buffer, u8.byteOffset, u8.byteLength).getUint32(0, true) !== 2) continue;
   let inner; try { inner = _lz4.decompress(u8.subarray(4)); } catch { continue; }
-  let blob; try { blob = UnrealBlob.decode(inner); } catch { continue; }
-  if (blob.error) continue;
+  let blob; try { blob = UnrealBlob.fromBytes(inner); } catch { continue; }
 
-  const log = findPropDeep(blob.properties, 'JingYingRiZhiList');
-  if (!log?.value?.elements?.length) continue;
+  const log = blob.findPropertyDeep('JingYingRiZhiList');
+  if (!log?.elements?.length) continue;
 
-  const name = findP(blob.properties, 'CustomMingZi')?.value?.displayString
-            ?? findPropDeep(blob.properties, 'CustomMingZi')?.value?.displayString
+  const name = blob.findProperty('CustomMingZi')?.value?.displayString
+            ?? blob.findPropertyDeep('CustomMingZi')?.value?.displayString
             ?? `(unnamed ${row.actor_serial})`;
 
   const entries = [];
-  for (const elem of log.value.elements) {
-    const p = Array.isArray(elem?.value) ? elem.value : null;
+  for (const elem of log.elements) {
+    const p = elem?.form === 'propStream' ? elem.stream.properties : null;
     if (!p) continue;
-    const date = ticksToDate(findP(p, 'RiZhiDateTime')?.value?.value);
+    const date = ticksToDate(findP(p, 'RiZhiDateTime')?.value?.binaryValue);
     const type = findP(p, 'Type')?.value;
     const pat = findP(p, 'ParamArrayTxt');
-    const parts = (pat?.value?.elements ?? []);
+    const parts = pat?.elements ?? [];
     const msg = parts.map(renderText).filter(Boolean).join(' / ') || '(no params)';
     const histTypes = parts.map(t => t?.historyType).join(',');
     entries.push({ date, type, msg, histTypes });

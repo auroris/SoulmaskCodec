@@ -37,21 +37,30 @@
  * non-canonical NaNs as `{ $nanBits: u32 }` wrappers.
  */
 
-import { Writer } from '../io.mjs';
 import { Property, registerProperty } from '../property.mjs';
 import { PropertyTag } from '../tag.mjs';
 import { StructValue, STRUCT_HANDLERS } from './struct.mjs';
-import { readElement, writeElement, elementToJSON, elementFromJSON } from '../element-codec.mjs';
+import { readElement, writeElement, elementToJSON, elementFromJSON, OBJECT_INNER_TYPES } from '../element-codec.mjs';
 
 export class ArrayProperty extends Property {
-  constructor({ tag, elements = [], innerTag = null, perElementTrailings = null } = {}) {
+  constructor({ tag, elements = [], innerTag = null, innerTagSize = null, perElementTrailings = null } = {}) {
     super({ tag });
     this.elements = elements;
     // Inner PropertyTag for Array<StructProperty>; carries the element's
-    // structName/structGuid. Null for non-Struct inner types. Size is
-    // computed at write time as the total byte length of all encoded
-    // elements (see `_writeValue`).
+    // structName/structGuid. Null for non-Struct inner types.
     this.innerTag = innerTag;
+    // Original wire value of innerTag.size, captured on read and replayed
+    // verbatim on write to preserve byte-identical round-trip. Soulmask's
+    // convention varies by game version: some saves write the byte count
+    // of element[0] here (`Array<AttrDian>{5}` with element[0]=121 bytes →
+    // innerTag.size=121), others write the total element bytes (the README's
+    // verified `Array<Guid>{6}` → innerTag.size=96=6×16, which happens to
+    // also equal element[0] size for fixed-size structs). Elements are
+    // None-delimited so the count alone determines structure; this field
+    // exists only to round-trip the wire's bookkeeping byte-for-byte.
+    // Null = "not captured" (programmatic blob or pre-existing JSON);
+    // the writer falls back to writing element[0]'s size in that case.
+    this.innerTagSize = innerTagSize;
     // Parallel array of per-element trailing blocks for
     // Array<ObjectProperty> in JianZhuInstYuanXings. Entries may be null
     // when an element has no trailing of its own. Null for any other
@@ -73,30 +82,30 @@ export class ArrayProperty extends Property {
       }
       const structName = innerTag.structName.value;
       const innerTagSize = innerTag._readSize;
-      const elemStart = cursor.pos();
       const handler = STRUCT_HANDLERS[structName];
       if (handler) {
         for (let i = 0; i < numElements; i++) {
           elements.push(new StructValue(structName, { form: 'binary', binaryValue: handler.read(cursor) }));
         }
       } else {
+        // Each element is its own None-terminated property stream; the
+        // budget is the remaining array bytes (a loose upper bound).
+        // Elements with internal None terminators stop cleanly regardless
+        // of which Soulmask size convention the wire used. When an
+        // element's decode throws mid-stream, the StructValue catch
+        // captures all remaining bytes as opaqueTail — which is correct
+        // for byte-identical round-trip, but means we lose subsequent
+        // elements from this array. Implementing the underlying decoder
+        // gap (FText historyType, etc.) is the real fix.
+        const remaining = () => endOff - cursor.pos();
         for (let i = 0; i < numElements; i++) {
-          elements.push(StructValue.fromReader(cursor, structName, innerTagSize, ctx));
+          elements.push(StructValue.fromReader(cursor, structName, remaining(), ctx));
         }
       }
-      const elemBytes = cursor.pos() - elemStart;
-      if (innerTagSize !== elemBytes) {
-        throw new Error(
-          `ArrayProperty<${structName}>: innerTag.size mismatch — ` +
-          `tag claimed ${innerTagSize}, elements consumed ${elemBytes} ` +
-          `(${numElements} elements). The wire's innerTag.size is expected ` +
-          `to equal the total bytes of all encoded elements.`
-        );
-      }
-      return new ArrayProperty({ tag, elements, innerTag });
+      return new ArrayProperty({ tag, elements, innerTag, innerTagSize });
     }
 
-    const isObj = _isObjectInnerType(innerType);
+    const isObj = OBJECT_INNER_TYPES.has(innerType);
     const perElementTrailings = [];
     let anyPerElementTrailing = false;
     for (let i = 0; i < numElements; i++) {
@@ -120,13 +129,21 @@ export class ArrayProperty extends Property {
     writer.writeInt32(this.elements.length);
 
     if (innerType === 'StructProperty') {
-      // Sub-buffer all elements to measure innerTag.size (total bytes,
-      // see header note), then write the inner tag with that size and
-      // the buffered element bytes.
-      const elementsBuf = new Writer(64);
-      for (const e of this.elements) e.toBytes(elementsBuf, ctx);
-      this.innerTag.toBytes(writer, elementsBuf.pos());
-      writer.writeBytes(elementsBuf.finalize());
+      // Emit the inner tag with a placeholder size, then write each
+      // element directly into the writer, then patch the inner tag's
+      // size: prefer the wire's original value (captured on read into
+      // `innerTagSize`) so unmodified blobs round-trip byte-identical
+      // across either Soulmask convention; fall back to element[0]'s
+      // size (the modern convention) when no original value is on hand.
+      const sizePos = this.innerTag.toBytes(writer);
+      const elemStart = writer.pos();
+      let elem0End = elemStart;
+      for (let i = 0; i < this.elements.length; i++) {
+        this.elements[i].toBytes(writer, ctx);
+        if (i === 0) elem0End = writer.pos();
+      }
+      const sizeToWrite = this.innerTagSize != null ? this.innerTagSize : (elem0End - elemStart);
+      writer.backpatchInt32(sizePos, sizeToWrite);
       return;
     }
 
@@ -140,9 +157,12 @@ export class ArrayProperty extends Property {
   _writeJSON(j) {
     const innerType = this.tag.innerType.value;
     // innerType is already on `j` from tag.toJSON. innerTag (the FULL
-    // PropertyTag of the inner struct elements) is separate state; size
-    // is omitted from its JSON because it's recomputed at write time.
+    // PropertyTag of the inner struct elements) is separate state.
     if (this.innerTag) j.innerTag = this.innerTag.toJSON();
+    // Preserve the wire's innerTag.size so the round-trip can replay
+    // whichever convention Soulmask used (per-version: element[0] size
+    // vs total). See constructor comment for details.
+    if (this.innerTagSize != null) j.innerTagSize = this.innerTagSize;
     j.elements = innerType === 'StructProperty'
       ? this.elements.map(e => e.toJSON())
       : this.elements.map(e => elementToJSON(e, innerType));
@@ -158,6 +178,7 @@ export class ArrayProperty extends Property {
     const tag = PropertyTag.fromJSON(j);
     const innerType = tag.innerType.value;
     const innerTag = j.innerTag ? PropertyTag.fromJSON(j.innerTag) : null;
+    const innerTagSize = j.innerTagSize ?? null;
     const elements = innerType === 'StructProperty'
       ? (j.elements ?? []).map(e => StructValue.fromJSON(e))
       : (j.elements ?? []).map(e => elementFromJSON(e, innerType));
@@ -168,17 +189,11 @@ export class ArrayProperty extends Property {
         return { transforms: t.transforms, ids: t.ids, aux: t.aux };
       });
     }
-    return new ArrayProperty({ tag, elements, innerTag, perElementTrailings });
+    return new ArrayProperty({ tag, elements, innerTag, innerTagSize, perElementTrailings });
   }
 }
 
 registerProperty('ArrayProperty', ArrayProperty);
-
-function _isObjectInnerType(t) {
-  return t === 'ObjectProperty' || t === 'ClassProperty'
-      || t === 'WeakObjectProperty' || t === 'LazyObjectProperty'
-      || t === 'WSObjectProperty';
-}
 
 // ── Per-element placement-binary block (JianZhuInstYuanXings) ───────────────
 function _tryReadObjectArrayPerElementBlock(cursor, endOff) {

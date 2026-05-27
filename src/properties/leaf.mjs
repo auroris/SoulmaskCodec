@@ -3,9 +3,10 @@
  * string, or FName. No nested decoding, no per-type wire quirks beyond
  * what `Cursor`/`Writer` already provide.
  *
- * Grouped here because each class is just a thin wrapper around one
- * read/write primitive; splitting them across files would be more
- * navigation than structure.
+ * The nine numeric leaves are generated from `NUMERIC_LEAVES`; the
+ * less-uniform ones (Bool, Str, Name, Byte, Enum) are hand-written
+ * because each has a distinct twist (tag-stored value, isNull/isUnicode
+ * wire flags, dual form, FName coercion).
  */
 
 import { Property, registerProperty } from '../property.mjs';
@@ -18,98 +19,79 @@ import { FName } from '../primitives.mjs';
 // avoid JavaScript Number precision loss above 2^53; `Writer.writeInt64`
 // accepts string/BigInt/safe-integer-Number with the same contract.
 
-class _IntegerProperty extends Property {
-  constructor({ tag, value = 0 } = {}) {
-    super({ tag });
-    this.value = value;
-  }
+const NUMERIC_LEAVES = {
+  IntProperty:    { read: c => c.readInt32(),               write: (w, v) => w.writeInt32(v),   default: 0,   fromJSON: j => j },
+  Int8Property:   { read: c => c.readInt8(),                write: (w, v) => w.writeInt8(v),    default: 0,   fromJSON: j => j },
+  Int16Property:  { read: c => c.readInt16(),               write: (w, v) => w.writeInt16(v),   default: 0,   fromJSON: j => j },
+  Int64Property:  { read: c => c.readInt64().toString(),    write: (w, v) => w.writeInt64(v),   default: '0', fromJSON: j => String(j) },
+  UInt16Property: { read: c => c.readUint16(),              write: (w, v) => w.writeUint16(v),  default: 0,   fromJSON: j => j },
+  UInt32Property: { read: c => c.readUint32(),              write: (w, v) => w.writeUint32(v),  default: 0,   fromJSON: j => j },
+  UInt64Property: { read: c => c.readUint64().toString(),   write: (w, v) => w.writeUint64(v),  default: '0', fromJSON: j => String(j) },
+  FloatProperty:  { read: c => c.readFloat32(),             write: (w, v) => w.writeFloat32(v), default: 0,   fromJSON: j => j },
+  DoubleProperty: { read: c => c.readFloat64(),             write: (w, v) => w.writeFloat64(v), default: 0,   fromJSON: j => j },
+};
 
-  _writeJSON(j) { j.value = this.value; }
-
-  static fromJSONFor(Cls) {
-    return j => new Cls({ tag: PropertyTag.fromJSON(j), value: j.value });
-  }
+function defineNumericLeaf(name, spec) {
+  const Cls = class extends Property {
+    constructor({ tag, value = spec.default } = {}) {
+      super({ tag });
+      this.value = value;
+    }
+    static fromReader(cursor, tag) { return new Cls({ tag, value: spec.read(cursor) }); }
+    _writeValue(w) { spec.write(w, this.value); }
+    _writeJSON(j) { j.value = this.value; }
+    static fromJSON(j) {
+      return new Cls({ tag: PropertyTag.fromJSON(j), value: spec.fromJSON(j.value) });
+    }
+  };
+  // Anonymize away the generic "Cls" so debugging / .constructor.name /
+  // instanceof error messages name the actual property type.
+  Object.defineProperty(Cls, 'name', { value: name });
+  registerProperty(name, Cls);
+  return Cls;
 }
 
-export class IntProperty extends _IntegerProperty {
-  static fromReader(cursor, tag) { return new IntProperty({ tag, value: cursor.readInt32() }); }
-  _writeValue(w) { w.writeInt32(this.value); }
-}
-IntProperty.fromJSON = _IntegerProperty.fromJSONFor(IntProperty);
-
-export class Int8Property extends _IntegerProperty {
-  static fromReader(cursor, tag) { return new Int8Property({ tag, value: cursor.readInt8() }); }
-  _writeValue(w) { w.writeInt8(this.value); }
-}
-Int8Property.fromJSON = _IntegerProperty.fromJSONFor(Int8Property);
-
-export class Int16Property extends _IntegerProperty {
-  static fromReader(cursor, tag) { return new Int16Property({ tag, value: cursor.readInt16() }); }
-  _writeValue(w) { w.writeInt16(this.value); }
-}
-Int16Property.fromJSON = _IntegerProperty.fromJSONFor(Int16Property);
-
-export class UInt16Property extends _IntegerProperty {
-  static fromReader(cursor, tag) { return new UInt16Property({ tag, value: cursor.readUint16() }); }
-  _writeValue(w) { w.writeUint16(this.value); }
-}
-UInt16Property.fromJSON = _IntegerProperty.fromJSONFor(UInt16Property);
-
-export class UInt32Property extends _IntegerProperty {
-  static fromReader(cursor, tag) { return new UInt32Property({ tag, value: cursor.readUint32() }); }
-  _writeValue(w) { w.writeUint32(this.value); }
-}
-UInt32Property.fromJSON = _IntegerProperty.fromJSONFor(UInt32Property);
-
-export class Int64Property extends _IntegerProperty {
-  // Stored as a decimal string (see header note).
-  constructor(opts = {}) { super({ ...opts, value: opts.value ?? '0' }); }
-  static fromReader(cursor, tag) { return new Int64Property({ tag, value: cursor.readInt64().toString() }); }
-  _writeValue(w) { w.writeInt64(this.value); }
-}
-Int64Property.fromJSON = j => new Int64Property({ tag: PropertyTag.fromJSON(j), value: String(j.value) });
-
-export class UInt64Property extends _IntegerProperty {
-  constructor(opts = {}) { super({ ...opts, value: opts.value ?? '0' }); }
-  static fromReader(cursor, tag) { return new UInt64Property({ tag, value: cursor.readUint64().toString() }); }
-  _writeValue(w) { w.writeUint64(this.value); }
-}
-UInt64Property.fromJSON = j => new UInt64Property({ tag: PropertyTag.fromJSON(j), value: String(j.value) });
-
-export class FloatProperty extends _IntegerProperty {
-  static fromReader(cursor, tag) { return new FloatProperty({ tag, value: cursor.readFloat32() }); }
-  _writeValue(w) { w.writeFloat32(this.value); }
-}
-FloatProperty.fromJSON = _IntegerProperty.fromJSONFor(FloatProperty);
-
-export class DoubleProperty extends _IntegerProperty {
-  static fromReader(cursor, tag) { return new DoubleProperty({ tag, value: cursor.readFloat64() }); }
-  _writeValue(w) { w.writeFloat64(this.value); }
-}
-DoubleProperty.fromJSON = _IntegerProperty.fromJSONFor(DoubleProperty);
+export const IntProperty    = defineNumericLeaf('IntProperty',    NUMERIC_LEAVES.IntProperty);
+export const Int8Property   = defineNumericLeaf('Int8Property',   NUMERIC_LEAVES.Int8Property);
+export const Int16Property  = defineNumericLeaf('Int16Property',  NUMERIC_LEAVES.Int16Property);
+export const Int64Property  = defineNumericLeaf('Int64Property',  NUMERIC_LEAVES.Int64Property);
+export const UInt16Property = defineNumericLeaf('UInt16Property', NUMERIC_LEAVES.UInt16Property);
+export const UInt32Property = defineNumericLeaf('UInt32Property', NUMERIC_LEAVES.UInt32Property);
+export const UInt64Property = defineNumericLeaf('UInt64Property', NUMERIC_LEAVES.UInt64Property);
+export const FloatProperty  = defineNumericLeaf('FloatProperty',  NUMERIC_LEAVES.FloatProperty);
+export const DoubleProperty = defineNumericLeaf('DoubleProperty', NUMERIC_LEAVES.DoubleProperty);
 
 // ── BoolProperty ────────────────────────────────────────────────────────────
 //
 // The value lives on tag.boolVal (the wire stores it in the tag itself, no
 // payload bytes follow). `Property.toBytes` writes the tag with size=0 and
-// the empty value buffer, so the boolVal byte is in the tag bytes.
+// the empty value buffer, so the boolVal byte is in the tag bytes. The
+// `value` accessor is a getter/setter over tag.boolVal so the two can't go
+// stale relative to each other.
 export class BoolProperty extends Property {
   constructor({ tag, value = false } = {}) {
     super({ tag });
-    this.value = value;
     if (tag) tag.boolVal = value ? 1 : 0;
   }
+  get value()  { return this.tag?.boolVal !== 0; }
+  set value(v) { if (this.tag) this.tag.boolVal = v ? 1 : 0; }
+
   static fromReader(_cursor, tag) {
     return new BoolProperty({ tag, value: tag.boolVal !== 0 });
   }
   _writeValue(_w) { /* value lives in the tag */ }
-  _writeJSON(j) { j.value = this.value; j.boolVal = this.tag.boolVal; }
+  // boolVal is already emitted by tag.toJSON() via TAG_EXTRAS.BoolProperty —
+  // only the redundant `value` boolean needs to be added here.
+  _writeJSON(j) { j.value = this.value; }
   static fromJSON(j) {
     const tag = PropertyTag.fromJSON(j);
-    tag.boolVal = j.boolVal ?? (j.value ? 1 : 0);
+    // Tolerate JSON that carried only `value` (no explicit `boolVal`); the
+    // common case is fully covered by tag.fromJSON above.
+    if (j.boolVal == null) tag.boolVal = j.value ? 1 : 0;
     return new BoolProperty({ tag, value: !!j.value });
   }
 }
+registerProperty('BoolProperty', BoolProperty);
 
 // ── StrProperty ─────────────────────────────────────────────────────────────
 export class StrProperty extends Property {
@@ -136,26 +118,38 @@ export class StrProperty extends Property {
       tag: PropertyTag.fromJSON(j),
       value: j.value ?? '',
       isNull: !!j.isNull,
-      isUnicode: !!j.isUnicode,
+      // Preserve "missing" as null (auto-detect on write) rather than
+      // collapsing to false — otherwise an unflagged non-ASCII value
+      // would be silently encoded as ANSI and lose its high bytes.
+      isUnicode: j.isUnicode == null ? null : !!j.isUnicode,
     });
   }
 }
+registerProperty('StrProperty', StrProperty);
 
-// ── NameProperty ────────────────────────────────────────────────────────────
+// ── NameProperty / EnumProperty ─────────────────────────────────────────────
 //
-// The value is an FName (bare FString in Soulmask's property-stream form).
-export class NameProperty extends Property {
+// Same wire layout (an FName); kept as separate classes so tag.type stays
+// round-trippable through the registry. Values are coerced to FName on
+// write so callers can assign a bare string and have it work. Static
+// methods use `new this(...)` so inherited `fromReader` / `fromJSON`
+// instantiate the right subclass.
+class _FNameLeaf extends Property {
   constructor({ tag, value = null } = {}) {
     super({ tag });
     this.value = value;
   }
-  static fromReader(cursor, tag) { return new NameProperty({ tag, value: FName.fromReader(cursor) }); }
-  _writeValue(w) { this.value.toBytes(w); }
-  _writeJSON(j) { j.value = this.value.toJSON(); }
-  static fromJSON(j) {
-    return new NameProperty({ tag: PropertyTag.fromJSON(j), value: FName.from(j.value) });
-  }
+  static fromReader(cursor, tag) { return new this({ tag, value: FName.fromReader(cursor) }); }
+  _writeValue(w) { FName.from(this.value).toBytes(w); }
+  _writeJSON(j) { j.value = this.value instanceof FName ? this.value.toJSON() : this.value; }
+  static fromJSON(j) { return new this({ tag: PropertyTag.fromJSON(j), value: FName.from(j.value) }); }
 }
+
+export class NameProperty extends _FNameLeaf {}
+export class EnumProperty extends _FNameLeaf {}
+
+registerProperty('NameProperty', NameProperty);
+registerProperty('EnumProperty', EnumProperty);
 
 // ── ByteProperty ────────────────────────────────────────────────────────────
 //
@@ -183,33 +177,4 @@ export class ByteProperty extends Property {
     return new ByteProperty({ tag, value });
   }
 }
-
-// ── EnumProperty ────────────────────────────────────────────────────────────
-export class EnumProperty extends Property {
-  constructor({ tag, value = null } = {}) {
-    super({ tag });
-    this.value = value;
-  }
-  static fromReader(cursor, tag) { return new EnumProperty({ tag, value: FName.fromReader(cursor) }); }
-  _writeValue(w) { FName.from(this.value).toBytes(w); }
-  _writeJSON(j) { j.value = this.value instanceof FName ? this.value.toJSON() : this.value; }
-  static fromJSON(j) {
-    return new EnumProperty({ tag: PropertyTag.fromJSON(j), value: FName.from(j.value) });
-  }
-}
-
-// ── Registration ────────────────────────────────────────────────────────────
-registerProperty('IntProperty', IntProperty);
-registerProperty('Int8Property', Int8Property);
-registerProperty('Int16Property', Int16Property);
-registerProperty('Int64Property', Int64Property);
-registerProperty('UInt16Property', UInt16Property);
-registerProperty('UInt32Property', UInt32Property);
-registerProperty('UInt64Property', UInt64Property);
-registerProperty('FloatProperty', FloatProperty);
-registerProperty('DoubleProperty', DoubleProperty);
-registerProperty('BoolProperty', BoolProperty);
-registerProperty('StrProperty', StrProperty);
-registerProperty('NameProperty', NameProperty);
 registerProperty('ByteProperty', ByteProperty);
-registerProperty('EnumProperty', EnumProperty);

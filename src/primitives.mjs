@@ -21,8 +21,12 @@
 const ZERO_GUID = '00000000-0000-0000-0000-000000000000';
 
 export class FName {
-  constructor(value, { isUnicode = false, number = 0, isNull = false } = {}) {
+  constructor(value, { isUnicode = null, number = 0, isNull = false } = {}) {
     this.value = value;
+    // `null` = "auto-detect on write" (the Writer picks ANSI/UTF-16 from
+    // the value's content). `true`/`false` = explicit wire encoding,
+    // captured from `fromReader` so unicode-encoded ASCII (or vice versa)
+    // round-trips byte-identically.
     this.isUnicode = isUnicode;
     // FName.Number: zero in every observed Soulmask FName (the wire form
     // omits it). Preserved on the instance for round-trip when the full UE
@@ -82,7 +86,10 @@ export class FName {
     if (typeof x === 'string') return new FName(x);
     if (x && typeof x === 'object') {
       return new FName(x.value, {
-        isUnicode: !!x.isUnicode,
+        // Preserve "missing" as null so the Writer auto-detects encoding
+        // from the value; only collapse to a boolean when the JSON
+        // carried an explicit choice (round-tripping a wire-captured FName).
+        isUnicode: x.isUnicode == null ? null : !!x.isUnicode,
         number: x.number || 0,
         isNull: !!x.isNull,
       });

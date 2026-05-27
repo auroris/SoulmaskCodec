@@ -157,7 +157,7 @@ export class ObjectRef {
     }
 
     // Guard 2: candidate classPath saveNum out of plausible range.
-    const peekSN = cursor.dv.getInt32(cursor.pos(), true);
+    const peekSN = cursor.peekInt32();
     if (peekSN > 1024 || peekSN < -1024) {
       return new ObjectRef({ kind, kindOnePrefix, path: pathFS.value, pathIsNull: pathFS.isNull });
     }
@@ -197,7 +197,7 @@ export class ObjectRef {
     // names are short identifiers (≤256 chars) starting with a letter or
     // underscore; peek to confirm before committing to a stream read.
     if (sizeHint - (cursor.pos() - start) >= 4) {
-      const peekNameSN = cursor.dv.getInt32(cursor.pos(), true);
+      const peekNameSN = cursor.peekInt32();
       if (peekNameSN <= 0 || peekNameSN > 256) {
         return new ObjectRef({
           kind, kindOnePrefix,
@@ -229,7 +229,7 @@ export class ObjectRef {
     // non-zero) or the trailing binary section's origin (12 zero bytes).
     let hasTerminatorTrailer = false;
     if (stream.terminated && cursor.pos() + 4 <= start + sizeHint && cursor.remaining() >= 4) {
-      const peekTrailer = cursor.dv.getInt32(cursor.pos(), true);
+      const peekTrailer = cursor.peekInt32();
       if (peekTrailer === 0) {
         cursor.skip(4);
         hasTerminatorTrailer = true;

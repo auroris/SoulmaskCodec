@@ -67,7 +67,7 @@ export class OpaqueProperty extends Property {
     const reason = `Unknown property type '${tag.type.value}'`;
     warnOrThrow(ctx, `OpaqueProperty['${tag.name.value}']: ${reason} (${sizeHint} bytes)`);
     const bytes = cursor.readBytes(sizeHint).slice();
-    return new OpaqueProperty({ tag, bytes, reason });
+    return new this({ tag, bytes, reason });
   }
 
   _writeValue(writer) {
@@ -80,9 +80,8 @@ export class OpaqueProperty extends Property {
   }
 
   static fromJSON(j) {
-    const tag = PropertyTag.fromJSON(j);
-    return new OpaqueProperty({
-      tag,
+    return new this({
+      tag: PropertyTag.fromJSON(j),
       bytes: b64decode(j.bytes),
       reason: j.reason ?? null,
     });

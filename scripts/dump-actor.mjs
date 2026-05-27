@@ -3,14 +3,14 @@
  * Decode one actor and print its property tree as JSON to stdout (or a file).
  *   node scripts/dump-actor.mjs <db> <actor_serial> [output.json]
  *
- * Convenience wrapper around UnrealBlob.decode + blobToJSON for inspecting a
- * single row.
+ * Convenience wrapper around UnrealBlob.fromBytes + blob.toJSONString for
+ * inspecting a single row.
  */
 
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 
-import { UnrealBlob, blobToJSONString } from '../src/wscodec.mjs';
+import { UnrealBlob } from '../src/wscodec.mjs';
 
 const _lz4 = await import('lz4-wasm-nodejs');
 const require = createRequire(import.meta.url);
@@ -28,8 +28,8 @@ const row = db.prepare('SELECT actor_serial, actor_name, actor_script, actor_dat
 if (!row) { console.error(`row not found: serial=${serial}`); process.exit(1); }
 const u8 = new Uint8Array(row.actor_data.buffer, row.actor_data.byteOffset, row.actor_data.byteLength);
 const inner = _lz4.decompress(u8.subarray(4));
-const blob = UnrealBlob.decode(inner);
-const out = blobToJSONString(blob, 2);
+const blob = UnrealBlob.fromBytes(inner);
+const out = blob.toJSONString(2);
 if (outPath) {
   fs.writeFileSync(outPath, out);
   console.error(`wrote ${out.length} bytes to ${outPath}`);

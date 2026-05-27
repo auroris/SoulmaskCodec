@@ -90,7 +90,7 @@ function itemName(classPath) {
 // Container display name: the player-set name if any, else the building's
 // translated name, else the cleaned class.
 function containerName(blob, actorScript) {
-  const dn = blob.properties.find(p => p.tag.name?.value === 'JianZhuDisplayName')?.value?.displayString;
+  const dn = blob.findProperty('JianZhuDisplayName')?.value?.displayString;
   if (dn) return dn;
   return lookupBuilding(actorScript) ?? shortClass(actorScript).replace(/^BP_/, '');
 }
@@ -164,25 +164,6 @@ function renderWorkLogMessage(type, paramElements) {
 
 const findP = (props, name) => Array.isArray(props) ? props.find(p => p.tag.name?.value === name) : null;
 
-// Depth-first walk of the property tree looking for a top-level or nested
-// property with the given name.
-function findPropDeep(props, target) {
-  if (!Array.isArray(props)) return null;
-  for (const p of props) {
-    if (p.tag.name?.value === target) return p;
-    const v = p.value;
-    if (Array.isArray(v?.embedded)) {
-      const hit = findPropDeep(v.embedded, target);
-      if (hit) return hit;
-    }
-    if (v?._structName && Array.isArray(v.value)) {
-      const hit = findPropDeep(v.value, target);
-      if (hit) return hit;
-    }
-  }
-  return null;
-}
-
 // ── Walk every actor ────────────────────────────────────────────────────────
 const db = new Database(dbPath, { readonly: true });
 const rows = db.prepare('SELECT actor_serial, actor_script, actor_data FROM actor_table').all();
@@ -218,27 +199,27 @@ for (const row of rows) {
     continue;
   }
   let blob;
-  try { blob = UnrealBlob.decode(inner); }
+  try { blob = UnrealBlob.fromBytes(inner); }
   catch (e) {
     stats.decodeError++;
     if (stats.decodeErrorExamples.length < 5) stats.decodeErrorExamples.push(`serial=${row.actor_serial}: decode ${e.message}`);
     continue;
   }
-  if (blob.error) {
-    stats.decodeError++;
-    if (stats.decodeErrorExamples.length < 5) stats.decodeErrorExamples.push(`serial=${row.actor_serial}: ${blob.error}`);
-    continue;
-  }
+
+  // Pull the propStream property list out of a StructValue array element.
+  // Soulmask log arrays use Array<Struct> shape; each element is a
+  // StructValue carrying a nested property stream.
+  const elemProps = (elem) => elem?.form === 'propStream' ? elem.stream.properties : null;
 
   // ── Workbench/chest access logs ──────────────────────────────────────────
   const wb = findP(blob.properties, 'RongQiCunQuRiZhiData');
-  if (wb?.value?.elements?.length) {
+  if (wb?.elements?.length) {
     stats.containers++;
     const name = containerName(blob, row.actor_script);
-    for (const elem of wb.value.elements) {
-      const p = Array.isArray(elem?.value) ? elem.value : null;
+    for (const elem of wb.elements) {
+      const p = elemProps(elem);
       if (!p) continue;
-      const dt    = ticksToDate(findP(p, 'RiZhiDateTime')?.value?.value);
+      const dt    = ticksToDate(findP(p, 'RiZhiDateTime')?.value?.binaryValue);
       const item  = itemName(findP(p, 'DaoJuClass')?.value?.path);
       const count = findP(p, 'DaoJuCount')?.value ?? 0;
       const cunqu = String(findP(p, 'CunQuType')?.value?.value ?? '');
@@ -258,20 +239,19 @@ for (const row of rows) {
   }
 
   // ── NPC work logs ────────────────────────────────────────────────────────
-  const log = findPropDeep(blob.properties, 'JingYingRiZhiList');
-  if (log?.value?.elements?.length) {
+  const log = blob.findPropertyDeep('JingYingRiZhiList');
+  if (log?.elements?.length) {
     stats.npcs++;
-    const npcName = findP(blob.properties, 'CustomMingZi')?.value?.displayString
-                  ?? findPropDeep(blob.properties, 'CustomMingZi')?.value?.displayString
+    const npcName = blob.findPropertyDeep('CustomMingZi')?.value?.displayString
                   ?? lookupNpc(row.actor_script)
                   ?? shortClass(row.actor_script);
-    for (const elem of log.value.elements) {
-      const p = Array.isArray(elem?.value) ? elem.value : null;
+    for (const elem of log.elements) {
+      const p = elemProps(elem);
       if (!p) continue;
-      const dt = ticksToDate(findP(p, 'RiZhiDateTime')?.value?.value);
+      const dt = ticksToDate(findP(p, 'RiZhiDateTime')?.value?.binaryValue);
       const type = findP(p, 'Type')?.value;
       const pat = findP(p, 'ParamArrayTxt');
-      const msg = renderWorkLogMessage(type, pat?.value?.elements);
+      const msg = renderWorkLogMessage(type, pat?.elements);
       events.push({
         date: dt,
         line: `${fmtGameTime(dt)}   ${msg}`
@@ -282,23 +262,23 @@ for (const row of rows) {
   }
 
   // ── Clan logs (GameMode > HGongHuiGuanLiQi > GongHuiMap{*} > value.ArrayRiZhi) ─
-  const ghm = findPropDeep(blob.properties, 'GongHuiMap');
-  if (ghm?.value?.entries) {
-    for (const entry of ghm.value.entries) {
-      const clanProps = Array.isArray(entry.value?.value) ? entry.value.value : null;
+  const ghm = blob.findPropertyDeep('GongHuiMap');
+  if (ghm?.entries) {
+    for (const entry of ghm.entries) {
+      const clanProps = elemProps(entry.value);
       if (!clanProps) continue;
       const arr = findP(clanProps, 'ArrayRiZhi');
-      if (!arr?.value?.elements?.length) continue;
+      if (!arr?.elements?.length) continue;
       stats.clans++;
       // The clan struct stores its display name in a plain `Name` StrProperty.
       const clanName = findP(clanProps, 'Name')?.value ?? `clan ${entry.key}`;
-      for (const elem of arr.value.elements) {
-        const p = Array.isArray(elem?.value) ? elem.value : null;
+      for (const elem of arr.elements) {
+        const p = elemProps(elem);
         if (!p) continue;
-        const dt = ticksToDate(findP(p, 'RiZhiDateTime')?.value?.value);
+        const dt = ticksToDate(findP(p, 'RiZhiDateTime')?.value?.binaryValue);
         const type = findP(p, 'Type')?.value;
         const pat = findP(p, 'ParamArrayTxt');
-        const msg = (pat?.value?.elements ?? []).map(renderText).filter(Boolean).join(' / ') || '(no detail)';
+        const msg = (pat?.elements ?? []).map(renderText).filter(Boolean).join(' / ') || '(no detail)';
         events.push({
           date: dt,
           line: `${fmtGameTime(dt)}   ${msg}`

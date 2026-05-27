@@ -3,16 +3,26 @@
  * into JSON (OpaqueProperty, OpaqueValue, FText _raw fallback, Delegate,
  * ArrayProperty perElementTrailings sometimes, UnrealBlob.bodyTrailing).
  *
- * Centralized so the Buffer import + the encode/decode pair only live in
- * one place; every other file imports `b64encode` / `b64decode` from here.
+ * Pure-JS implementation using the `btoa` / `atob` globals — available in
+ * every modern browser and in Node >= 16. No `node:buffer` import, so this
+ * file bundles cleanly for the browser builds. Encoding is chunked to
+ * stay under String.fromCharCode.apply's argument-count cap on large
+ * Uint8Arrays (typical browsers limit at ~64K args).
  */
 
-import { Buffer } from 'node:buffer';
+const CHUNK = 0x8000;
 
 export function b64encode(u8) {
-  return Buffer.from(u8.buffer, u8.byteOffset, u8.byteLength).toString('base64');
+  let bin = '';
+  for (let i = 0; i < u8.length; i += CHUNK) {
+    bin += String.fromCharCode.apply(null, u8.subarray(i, i + CHUNK));
+  }
+  return btoa(bin);
 }
 
 export function b64decode(s) {
-  return new Uint8Array(Buffer.from(s, 'base64'));
+  const bin = atob(s);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
 }

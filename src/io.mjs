@@ -6,6 +6,13 @@
  * properties) builds on top of these.
  */
 
+// Module-scope decoders so we pay the construction cost once per process.
+// `latin1` maps bytes 0-255 onto code points 0-255 identically, matching the
+// historical char-by-char `String.fromCharCode(byte)` loop. `utf-16le` matches
+// the UE wire encoding for non-ANSI FStrings.
+const _LATIN1_DECODER  = new TextDecoder('latin1');
+const _UTF16LE_DECODER = new TextDecoder('utf-16le');
+
 export class Cursor {
   constructor(bytes, offset = 0) {
     this.bytes = bytes;
@@ -55,6 +62,14 @@ export class Cursor {
   readFloat64() { const v = this.dv.getFloat64(this.offset, true);    this.offset += 8; return v; }
 
   /**
+   * Peek a 4-byte little-endian int32 at the current position without
+   * advancing the cursor. Used by ambiguity-resolving heuristics
+   * (property-stream tag sniffing, ObjectRef array-element guards) that
+   * need to look ahead before committing to a read.
+   */
+  peekInt32()  { return this.dv.getInt32(this.offset, true); }
+
+  /**
    * Read `n` bytes and return them as a Uint8Array VIEW over the underlying
    * buffer (no copy). The returned subarray shares storage with this cursor's
    * buffer: mutating it mutates the buffer, and the view becomes stale if
@@ -85,16 +100,7 @@ export class Cursor {
     const byteLen = isUnicode ? codeUnits * 2 : codeUnits;
     const slice = this.readBytes(byteLen);
     const data = isUnicode ? slice.subarray(0, byteLen - 2) : slice.subarray(0, byteLen - 1);
-    let value;
-    if (isUnicode) {
-      const codes = [];
-      const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
-      for (let i = 0; i + 1 < data.length; i += 2) codes.push(dv.getUint16(i, true));
-      value = String.fromCharCode(...codes);
-    } else {
-      value = '';
-      for (let i = 0; i < data.length; i++) value += String.fromCharCode(data[i]);
-    }
+    const value = isUnicode ? _UTF16LE_DECODER.decode(data) : _LATIN1_DECODER.decode(data);
     return { value, isUnicode, isNull: false };
   }
 }
@@ -120,6 +126,16 @@ export class Writer {
     this.bytes = newU8;
     this.dv = new DataView(newBuf);
   }
+
+  /**
+   * Overwrite a 4-byte little-endian int32 at an absolute buffer position
+   * recorded earlier (via `pos()`). Used for tag-size back-patching: emit
+   * the tag with a 0 placeholder, write the value bytes (which may grow
+   * the buffer), then patch in the actual size. Resizing the buffer
+   * preserves the prefix bytes, so an earlier-captured position stays
+   * valid through any number of intervening writes.
+   */
+  backpatchInt32(pos, value) { this.dv.setInt32(pos, value | 0, true); }
 
   writeUint8(v)   { this._ensure(1); this.dv.setUint8(this.offset, v);              this.offset += 1; }
   writeInt8(v)    { this._ensure(1); this.dv.setInt8(this.offset, v);               this.offset += 1; }

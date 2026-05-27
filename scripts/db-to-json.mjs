@@ -28,7 +28,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 
-import { UnrealBlob, blobToJSON, jsonReplacer } from '../src/wscodec.mjs';
+import { UnrealBlob, jsonReplacer } from '../src/wscodec.mjs';
 
 const _lz4 = await import('lz4-wasm-nodejs');
 const require = createRequire(import.meta.url);
@@ -129,11 +129,10 @@ function actorDataToJSON(u8) {
   try { inner = _lz4.decompress(u8.subarray(4)); }
   catch { stats.actorRawFallback++; return { $blob: b64(u8) }; }
   let blob;
-  try { blob = UnrealBlob.decode(inner); }
+  try { blob = UnrealBlob.fromBytes(inner); }
   catch { stats.actorRawFallback++; return { $blob: b64(u8) }; }
-  if (blob.error) { stats.actorRawFallback++; return { $blob: b64(u8) }; }
   stats.actorBlobDecoded++;
-  return { blob: blobToJSON(blob) };
+  return { blob: blob.toJSON() };
 }
 
 // ── Emit ───────────────────────────────────────────────────────────────────

@@ -26,7 +26,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 
-import { jsonToBlob, jsonReviver } from '../src/wscodec.mjs';
+import { UnrealBlob, jsonReviver } from '../src/wscodec.mjs';
 
 const _lz4 = await import('lz4-wasm-nodejs');
 const require = createRequire(import.meta.url);
@@ -163,8 +163,8 @@ function cellFromJSON(v, columnContext) {
     // Structured actor_data takes priority over the $blob fallback so we
     // re-emit through wscodec when both forms are theoretically present.
     if (v.blob && columnContext === 'actor_table.actor_data') {
-      const blob = jsonToBlob(v.blob);
-      const inner = blob.serialize();
+      const blob = UnrealBlob.fromJSON(v.blob);
+      const inner = blob.toBytes();
       const lz4 = _lz4.compress(inner);
       const out = Buffer.alloc(4 + lz4.length);
       out.writeUInt32LE(0x00000002, 0);   // outer version tag

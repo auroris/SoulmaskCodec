@@ -106,7 +106,7 @@ export class PropertyStream {
 export function peekLooksLikePropertyTag(cursor) {
   if (cursor.remaining() < 8) return false;
   const off = cursor.pos();
-  const len = cursor.dv.getInt32(off, true);
+  const len = cursor.peekInt32();
   if (len <= 1 || len > 64) return false;
   if (cursor.remaining() < 4 + len) return false;
   if (cursor.bytes[off + 4 + len - 1] !== 0) return false;  // NUL terminator

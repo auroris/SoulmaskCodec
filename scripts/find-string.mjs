@@ -66,50 +66,43 @@ function visitFText(t, path, hit) {
   }
 }
 
+function visitElement(e, path, hit) {
+  if (typeof e === 'string') checkString(e, path, hit);
+  if (e?.constructor?.name === 'FName') checkString(e.value, path, hit);
+  if (e?.historyType !== undefined) visitFText(e, path, hit);
+  if (e?.constructor?.name === 'ObjectRef') {
+    checkString(e.path, path + '.path', hit);
+    checkString(e.classPath, path + '.classPath', hit);
+    if (e.embedded?.properties) visitProperties(e.embedded.properties, path + '<embedded>', hit);
+  }
+  if (e?.constructor?.name === 'SoftObjectRef') {
+    checkString(e.assetPath, path + '.assetPath', hit);
+    checkString(e.subPath, path + '.subPath', hit);
+  }
+  if (e?.constructor?.name === 'StructValue' && e.form === 'propStream' && e.stream?.properties) {
+    visitProperties(e.stream.properties, path + `<${e.structName}>`, hit);
+  }
+}
+
 function visitProperties(props, path, hit) {
   for (const p of props) {
-    const name = p.name;
-    const here = `${path}.${name}`;
-    const v = p.value;
-    // Scalars / strings.
-    if (typeof v === 'string') checkString(v, here, hit);
-    if (v?.constructor?.name === 'FName') checkString(v.value, here, hit);
-    if (v?.historyType !== undefined) visitFText(v, here, hit);
-    // ObjectRef path strings.
-    if (v?.constructor?.name === 'ObjectRef') {
-      checkString(v.path, here + '.path', hit);
-      checkString(v.classPath, here + '.classPath', hit);
-      if (Array.isArray(v.embedded)) visitProperties(v.embedded, here + '<embedded>', hit);
-    }
-    // SoftObjectRef.
-    if (v?.constructor?.name === 'SoftObjectRef') {
-      checkString(v.assetPath, here + '.assetPath', hit);
-      checkString(v.subPath, here + '.subPath', hit);
-    }
-    // Struct propStream.
-    if (v?._structName && Array.isArray(v.value)) visitProperties(v.value, here + `<${v._structName}>`, hit);
-    // Array elements (struct, object, text).
-    if (Array.isArray(v?.elements)) {
-      for (let i = 0; i < v.elements.length; i++) {
-        const e = v.elements[i];
-        const ep = `${here}[${i}]`;
-        if (typeof e === 'string') checkString(e, ep, hit);
-        if (e?.constructor?.name === 'FName') checkString(e.value, ep, hit);
-        if (e?.historyType !== undefined) visitFText(e, ep, hit);
-        if (e?.constructor?.name === 'ObjectRef') {
-          checkString(e.path, ep + '.path', hit);
-          if (Array.isArray(e.embedded)) visitProperties(e.embedded, ep + '<embedded>', hit);
-        }
-        if (e?._structName && Array.isArray(e.value)) visitProperties(e.value, ep + `<${e._structName}>`, hit);
+    const here = `${path}.${p.name}`;
+    // Property's value field: scalar / FName / FText / ObjectRef / SoftObjectRef / StructValue.
+    visitElement(p.value, here, hit);
+
+    // ArrayProperty / SetProperty: elements live directly on the property.
+    if (Array.isArray(p.elements)) {
+      for (let i = 0; i < p.elements.length; i++) {
+        visitElement(p.elements[i], `${here}[${i}]`, hit);
       }
     }
-    // Map entries.
-    if (Array.isArray(v?.entries)) {
-      for (let i = 0; i < v.entries.length; i++) {
-        const ent = v.entries[i];
-        if (typeof ent.key === 'string')  checkString(ent.key,   `${here}{${i}}.key`, hit);
-        if (typeof ent.value === 'string') checkString(ent.value, `${here}{${i}}.value`, hit);
-        if (ent.value?._structName && Array.isArray(ent.value.value)) visitProperties(ent.value.value, `${here}{${i}}.value<${ent.value._structName}>`, hit);
+
+    // MapProperty: entries live directly on the property.
+    if (Array.isArray(p.entries)) {
+      for (let i = 0; i < p.entries.length; i++) {
+        const ent = p.entries[i];
+        visitElement(ent.key,   `${here}{${i}}.key`,   hit);
+        visitElement(ent.value, `${here}{${i}}.value`, hit);
       }
     }
   }
@@ -121,8 +114,7 @@ for (const row of rows) {
   const u8 = new Uint8Array(row.actor_data.buffer, row.actor_data.byteOffset, row.actor_data.byteLength);
   if (new DataView(u8.buffer, u8.byteOffset, u8.byteLength).getUint32(0, true) !== 2) continue;
   let inner; try { inner = _lz4.decompress(u8.subarray(4)); } catch { continue; }
-  let blob; try { blob = UnrealBlob.decode(inner); } catch { continue; }
-  if (blob.error) continue;
+  let blob; try { blob = UnrealBlob.fromBytes(inner); } catch { continue; }
   const localHits = [];
   visitProperties(blob.properties, '', (path, value) => {
     localHits.push({ path, value });
