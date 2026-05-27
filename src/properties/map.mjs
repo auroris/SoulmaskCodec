@@ -7,10 +7,11 @@
  *
  * Soulmask quirks (matter for byte-identical round trip):
  *
- *   1. Map<Struct, _> keys are always raw 16-byte FGuids on the wire
- *      (no inner PropertyTag, no nested stream). Every populated
- *      Map<Struct, _> observed in world.db (the guild manager maps in
- *      GAMEMODE) uses Guids as keys.
+ *   1. Map<Struct, _> keys are EITHER raw 16-byte FGuids (the guild manager
+ *      maps in GAMEMODE) OR a nested property stream (`XinQingTagLog` —
+ *      where each key is a `TagName` NameProperty wrapping a gameplay-effect
+ *      tag identifier, terminated by None). The two are distinguished by
+ *      peeking ahead with `peekLooksLikePropertyTag`.
  *
  *   2. Map<_, Struct> values are EITHER a nested property stream
  *      (`GongHuiMap`, `PlayerGongHuiDataMap`, `GeRenJianZhuYingHuoList`,
@@ -94,15 +95,15 @@ export class MapProperty extends Property {
 registerProperty('MapProperty', MapProperty);
 
 // Per the header quirks:
-//   - StructProperty key   → raw FGuid string
-//   - StructProperty value → StructValue with form='propStream' OR FGuid;
+//   - StructProperty key   → StructValue with form='propStream' OR FGuid;
 //     decided by peeking for a PropertyTag-shaped name FString.
+//   - StructProperty value → StructValue with form='propStream' OR FGuid;
+//     decided by the same peek.
 //   - everything else      → element-codec
 function _readMapElement(cursor, type, isKey, ctx) {
   if (type === 'StructProperty') {
-    if (isKey) return FGuid.fromReader(cursor).value;
     if (peekLooksLikePropertyTag(cursor)) {
-      return StructValue.fromReaderTagged(cursor, '(map value)', ctx);
+      return StructValue.fromReaderTagged(cursor, isKey ? '(map key)' : '(map value)', ctx);
     }
     return FGuid.fromReader(cursor).value;
   }
@@ -111,7 +112,6 @@ function _readMapElement(cursor, type, isKey, ctx) {
 
 function _writeMapElement(writer, type, value, isKey, ctx) {
   if (type === 'StructProperty') {
-    if (isKey) { new FGuid(value).toBytes(writer); return; }
     if (value instanceof StructValue && value.form === 'propStream') {
       // Property-stream body + None terminator (stream.toBytes appends it).
       value.stream.toBytes(writer);
@@ -123,18 +123,16 @@ function _writeMapElement(writer, type, value, isKey, ctx) {
   writeElement(writer, type, value, ctx);
 }
 
-function _mapElementToJSON(v, type, isKey) {
+function _mapElementToJSON(v, type, _isKey) {
   if (type === 'StructProperty') {
-    if (isKey) return v;                       // Guid string
     if (v instanceof StructValue) return v.toJSON();
     return v;                                   // Guid string
   }
   return elementToJSON(v, type);
 }
 
-function _mapElementFromJSON(j, type, isKey) {
+function _mapElementFromJSON(j, type, _isKey) {
   if (type === 'StructProperty') {
-    if (isKey) return j;
     if (j && typeof j === 'object' && j.form) return StructValue.fromJSON(j);
     return j;
   }

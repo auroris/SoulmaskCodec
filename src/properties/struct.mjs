@@ -129,9 +129,20 @@ export class StructValue {
       const stream = PropertyStream.fromReader(cursor, isFinite(sizeHint) ? startOff + sizeHint : Infinity, { ctx });
       return new StructValue(structName, { form: 'propStream', stream });
     } catch (e) {
-      const consumed = cursor.pos() - startOff;
-      const tail = isFinite(sizeHint) ? sizeHint - consumed : 0;
-      const opaqueTail = tail > 0 ? cursor.readBytes(tail).slice() : null;
+      // Snapshot the full element wire bytes for verbatim re-emit, then
+      // park the cursor exactly at the expected element end. The inner
+      // decode may have overrun the budget (cursor past startOff+sizeHint)
+      // if it tripped on a bad length read — without the seek, the caller's
+      // per-element bookkeeping would inherit a corrupt cursor position.
+      // Capturing the whole element (not just the unread tail) is what
+      // lets the writer reproduce the original bytes when this StructValue
+      // is the only thing emitted in decodeError form.
+      let opaqueTail = null;
+      if (isFinite(sizeHint)) {
+        const end = startOff + sizeHint;
+        opaqueTail = cursor.bytes.subarray(startOff, end).slice();
+        cursor.seek(end);
+      }
       warnOrThrow(ctx, `StructValue<${structName}>: decode failed: ${e.message}`);
       return new StructValue(structName, { form: 'decodeError', decodeError: e.message, opaqueTail });
     }

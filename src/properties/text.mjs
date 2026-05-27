@@ -122,105 +122,97 @@ export class FTextValue {
    */
   static fromReader(cursor, sizeHint, ctx) {
     const start = cursor.pos();
-    try {
-      const flags = cursor.readUint32();
-      const historyType = cursor.readInt8();
-      if (historyType === -1) {
-        const bHas = cursor.readInt32();
-        let displayString = null, displayStringIsNull = false;
-        if (bHas) {
-          const fs = cursor.readFString();
-          displayString = fs.value;
-          displayStringIsNull = fs.isNull;
-        }
-        return new FTextValue({ flags, historyType: -1, displayString, displayStringIsNull });
+    const flags = cursor.readUint32();
+    const historyType = cursor.readInt8();
+    if (historyType === -1) {
+      const bHas = cursor.readInt32();
+      let displayString = null, displayStringIsNull = false;
+      if (bHas) {
+        const fs = cursor.readFString();
+        displayString = fs.value;
+        displayStringIsNull = fs.isNull;
       }
-      if (historyType === 0) {
-        const nsFS = cursor.readFString();
-        const kFS  = cursor.readFString();
-        const ssFS = cursor.readFString();
-        return new FTextValue({
-          flags, historyType: 0,
-          namespace:    nsFS.value, namespaceIsNull:    nsFS.isNull,
-          key:          kFS.value,  keyIsNull:          kFS.isNull,
-          sourceString: ssFS.value, sourceStringIsNull: ssFS.isNull,
-        });
-      }
-      if (historyType === 1) {
-        const sourceFmt = FTextValue.fromReader(cursor, Infinity, ctx);
-        const numArgs = cursor.readInt32();
-        const args = [];
-        for (let i = 0; i < numArgs; i++) {
-          const keyFS = cursor.readFString();
-          const type = cursor.readInt8();
-          args.push({ key: keyFS.value, keyIsNull: keyFS.isNull, type, value: _readContentValue(cursor, type, ctx) });
-        }
-        return new FTextValue({ flags, historyType: 1, sourceFmt, arguments: args });
-      }
-      if (historyType === 2) {
-        const sourceFmt = FTextValue.fromReader(cursor, Infinity, ctx);
-        const numArgs = cursor.readInt32();
-        const args = [];
-        for (let i = 0; i < numArgs; i++) {
-          const type = cursor.readInt8();
-          args.push({ type, value: _readContentValue(cursor, type, ctx) });
-        }
-        return new FTextValue({ flags, historyType: 2, sourceFmt, arguments: args });
-      }
-      if (historyType === 4) {
-        const argType = cursor.readInt8();
-        const argValue = _readContentValue(cursor, argType, ctx);
-        const sourceValue = { type: argType, value: argValue };
-        const bHasFormatOptions = cursor.readUint32();
-        let formatOptions = null;
-        if (bHasFormatOptions) {
-          formatOptions = {
-            alwaysSign:    cursor.readUint32(),
-            useGrouping:   cursor.readUint32(),
-            roundingMode:  cursor.readInt8(),
-            minIntDigits:  cursor.readInt32(),
-            maxIntDigits:  cursor.readInt32(),
-            minFracDigits: cursor.readInt32(),
-            maxFracDigits: cursor.readInt32(),
-          };
-        }
-        const bHasCulture = cursor.readUint32();
-        let culture = null, cultureIsNull = false;
-        if (bHasCulture) {
-          const cFS = cursor.readFString();
-          culture = cFS.value;
-          cultureIsNull = cFS.isNull;
-        }
-        return new FTextValue({ flags, historyType: 4, sourceValue, formatOptions, culture, cultureIsNull });
-      }
-      if (historyType === 11) {
-        const tableId = FName.fromReader(cursor);
-        const keyFS = cursor.readFString();
-        return new FTextValue({
-          flags, historyType: 11,
-          tableId,
-          tableKey: keyFS.value,
-          tableKeyIsNull: keyFS.isNull,
-        });
-      }
-      // Unknown historyType: capture remaining bytes for verbatim round-trip
-      // when a finite size budget is available; otherwise throw so the
-      // nearest finite-budget caller can decide whether to fall back to
-      // OpaqueValue at the element or array level.
-      if (!isFinite(sizeHint)) {
-        throw new Error(`FText: unimplemented historyType ${historyType} with no size budget`);
-      }
-      warnOrThrow(ctx, `FTextValue: unimplemented historyType ${historyType} (captured remaining bytes verbatim)`);
-      const remaining = sizeHint - (cursor.pos() - start);
-      const raw = remaining > 0 ? cursor.readBytes(remaining).slice() : new Uint8Array(0);
-      return new FTextValue({ flags, historyType, _raw: raw });
-    } catch (e) {
-      // When sizeHint is Infinity we cannot capture a byte-safe OpaqueValue;
-      // rethrow so a finite-budget caller (TextProperty / readArrayValue's
-      // catch) handles it. Caller with a finite budget rolls back + opaques.
-      if (!isFinite(sizeHint)) throw e;
-      throw e;  // propagate; the surrounding container catches and opaques.
+      return new FTextValue({ flags, historyType: -1, displayString, displayStringIsNull });
     }
+    if (historyType === 0) {
+      const nsFS = cursor.readFString();
+      const kFS  = cursor.readFString();
+      const ssFS = cursor.readFString();
+      return new FTextValue({
+        flags, historyType: 0,
+        namespace:    nsFS.value, namespaceIsNull:    nsFS.isNull,
+        key:          kFS.value,  keyIsNull:          kFS.isNull,
+        sourceString: ssFS.value, sourceStringIsNull: ssFS.isNull,
+      });
+    }
+    if (historyType === 1) {
+      const sourceFmt = FTextValue.fromReader(cursor, Infinity, ctx);
+      const numArgs = cursor.readInt32();
+      const args = [];
+      for (let i = 0; i < numArgs; i++) {
+        const keyFS = cursor.readFString();
+        const type = cursor.readInt8();
+        args.push({ key: keyFS.value, keyIsNull: keyFS.isNull, type, value: _readContentValue(cursor, type, ctx) });
+      }
+      return new FTextValue({ flags, historyType: 1, sourceFmt, arguments: args });
+    }
+    if (historyType === 2) {
+      const sourceFmt = FTextValue.fromReader(cursor, Infinity, ctx);
+      const numArgs = cursor.readInt32();
+      const args = [];
+      for (let i = 0; i < numArgs; i++) {
+        const type = cursor.readInt8();
+        args.push({ type, value: _readContentValue(cursor, type, ctx) });
+      }
+      return new FTextValue({ flags, historyType: 2, sourceFmt, arguments: args });
+    }
+    if (historyType === 4) {
+      const argType = cursor.readInt8();
+      const argValue = _readContentValue(cursor, argType, ctx);
+      const sourceValue = { type: argType, value: argValue };
+      const bHasFormatOptions = cursor.readUint32();
+      let formatOptions = null;
+      if (bHasFormatOptions) {
+        formatOptions = {
+          alwaysSign:    cursor.readUint32(),
+          useGrouping:   cursor.readUint32(),
+          roundingMode:  cursor.readInt8(),
+          minIntDigits:  cursor.readInt32(),
+          maxIntDigits:  cursor.readInt32(),
+          minFracDigits: cursor.readInt32(),
+          maxFracDigits: cursor.readInt32(),
+        };
+      }
+      const bHasCulture = cursor.readUint32();
+      let culture = null, cultureIsNull = false;
+      if (bHasCulture) {
+        const cFS = cursor.readFString();
+        culture = cFS.value;
+        cultureIsNull = cFS.isNull;
+      }
+      return new FTextValue({ flags, historyType: 4, sourceValue, formatOptions, culture, cultureIsNull });
+    }
+    if (historyType === 11) {
+      const tableId = FName.fromReader(cursor);
+      const keyFS = cursor.readFString();
+      return new FTextValue({
+        flags, historyType: 11,
+        tableId,
+        tableKey: keyFS.value,
+        tableKeyIsNull: keyFS.isNull,
+      });
+    }
+    // Unknown historyType: capture remaining bytes for verbatim round-trip
+    // when a finite size budget is available; otherwise throw so the
+    // nearest finite-budget caller (TextProperty.fromReader has a try/catch
+    // that falls back to OpaqueValue) can recover at the property level.
+    if (!isFinite(sizeHint)) {
+      throw new Error(`FText: unimplemented historyType ${historyType} with no size budget`);
+    }
+    warnOrThrow(ctx, `FTextValue: unimplemented historyType ${historyType} (captured remaining bytes verbatim)`);
+    const remaining = sizeHint - (cursor.pos() - start);
+    const raw = remaining > 0 ? cursor.readBytes(remaining).slice() : new Uint8Array(0);
+    return new FTextValue({ flags, historyType, _raw: raw });
   }
 
   toBytes(writer) {

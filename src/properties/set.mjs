@@ -6,10 +6,13 @@
  *
  * Set element shapes match ArrayProperty's element shapes for non-Struct
  * inner types and are read/written via the shared element-codec. For
- * StructProperty inner type, Set elements are raw 16-byte FGuids — no
- * inner PropertyTag, no nested stream. Every Set<StructProperty> observed
- * in Soulmask world.db uses Guids as elements, matching MapProperty's
- * assumption for Struct keys.
+ * StructProperty inner type, elements are EITHER raw 16-byte FGuids (the
+ * common case across Soulmask saves) OR a nested property stream (mirrors
+ * Map<Struct, _> key disambiguation; no Set<Struct> property-stream case
+ * has been observed in saves but the codec stays robust against one).
+ * The two are distinguished by peeking with `peekLooksLikePropertyTag` —
+ * random FGuid bytes effectively never satisfy the identifier-FString
+ * test, so this peek is safe.
  *
  * Set<ObjectProperty> isn't exercised by observed Soulmask data; the
  * element-codec dispatches with `Infinity` sizeHint in that case, which
@@ -20,6 +23,8 @@
 import { Property, registerProperty } from '../property.mjs';
 import { PropertyTag } from '../tag.mjs';
 import { FGuid } from '../primitives.mjs';
+import { peekLooksLikePropertyTag } from '../property-stream.mjs';
+import { StructValue } from './struct.mjs';
 import { readElement, writeElement, elementToJSON, elementFromJSON } from '../element-codec.mjs';
 
 export class SetProperty extends Property {
@@ -67,24 +72,43 @@ export class SetProperty extends Property {
 
 registerProperty('SetProperty', SetProperty);
 
-// Set<Struct> elements are raw FGuid strings; everything else delegates
+// Set<Struct> elements: peek to choose FGuid vs nested property stream
+// (mirrors map.mjs's key/value disambiguation). Everything else delegates
 // to the shared element codec.
 function _readSetElement(cursor, innerType, ctx) {
-  if (innerType === 'StructProperty') return FGuid.fromReader(cursor).value;
+  if (innerType === 'StructProperty') {
+    if (peekLooksLikePropertyTag(cursor)) {
+      return StructValue.fromReaderTagged(cursor, '(set element)', ctx);
+    }
+    return FGuid.fromReader(cursor).value;
+  }
   return readElement(cursor, innerType, Infinity, ctx);
 }
 
 function _writeSetElement(writer, innerType, value, ctx) {
-  if (innerType === 'StructProperty') { new FGuid(value).toBytes(writer); return; }
+  if (innerType === 'StructProperty') {
+    if (value instanceof StructValue && value.form === 'propStream') {
+      value.stream.toBytes(writer);
+      return;
+    }
+    new FGuid(value).toBytes(writer);
+    return;
+  }
   writeElement(writer, innerType, value, ctx);
 }
 
 function _setElementToJSON(e, innerType) {
-  if (innerType === 'StructProperty') return e;       // Guid string
+  if (innerType === 'StructProperty') {
+    if (e instanceof StructValue) return e.toJSON();
+    return e;                                          // Guid string
+  }
   return elementToJSON(e, innerType);
 }
 
 function _setElementFromJSON(j, innerType) {
-  if (innerType === 'StructProperty') return j;       // Guid string
+  if (innerType === 'StructProperty') {
+    if (j && typeof j === 'object' && j.form) return StructValue.fromJSON(j);
+    return j;                                          // Guid string
+  }
   return elementFromJSON(j, innerType);
 }

@@ -109,7 +109,12 @@ export class ArrayProperty extends Property {
     const perElementTrailings = [];
     let anyPerElementTrailing = false;
     for (let i = 0; i < numElements; i++) {
-      const elemSizeHint = isObj ? endOff - cursor.pos() : Infinity;
+      // Reserve at least 1 byte (= a kind-only ObjectRef) for each remaining
+      // element so the current element's loose budget can't bleed into them.
+      // Without this, a kind=0x09 element at the end of an array followed by
+      // kind=0x00 padding elements misreads those zero bytes as a null-form
+      // classPath FString + embedded stream, blowing past the buffer.
+      const elemSizeHint = isObj ? (endOff - cursor.pos()) - (numElements - i - 1) : Infinity;
       elements.push(readElement(cursor, innerType, elemSizeHint, ctx));
       if (isObj) {
         const t = _tryReadObjectArrayPerElementBlock(cursor, endOff);
