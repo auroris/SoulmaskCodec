@@ -31,6 +31,15 @@ const NUMERIC_LEAVES = {
   DoubleProperty: { read: c => c.readFloat64(),             write: (w, v) => w.writeFloat64(v), default: 0,   fromJSON: j => j },
 };
 
+/**
+ * Build a numeric Property subclass for the given UE type name. The returned
+ * class implements `fromReader` / `_writeValue` / `_writeJSON` / `fromJSON`
+ * by delegating to the `spec` handlers.
+ *
+ * @param {string} name  UE type name (e.g. `'IntProperty'`).
+ * @param {{read: Function, write: Function, default: any, fromJSON: Function}} spec
+ * @returns {typeof Property}
+ */
 function defineNumericLeaf(name, spec) {
   const Cls = class extends Property {
     constructor({ tag, value = spec.default } = {}) {
@@ -61,14 +70,18 @@ export const UInt64Property = defineNumericLeaf('UInt64Property', NUMERIC_LEAVES
 export const FloatProperty  = defineNumericLeaf('FloatProperty',  NUMERIC_LEAVES.FloatProperty);
 export const DoubleProperty = defineNumericLeaf('DoubleProperty', NUMERIC_LEAVES.DoubleProperty);
 
-// ── BoolProperty ────────────────────────────────────────────────────────────
-//
-// The value lives on tag.boolVal (the wire stores it in the tag itself, no
-// payload bytes follow). `Property.toBytes` writes the tag with size=0 and
-// the empty value buffer, so the boolVal byte is in the tag bytes. The
-// `value` accessor is a getter/setter over tag.boolVal so the two can't go
-// stale relative to each other.
+/**
+ * Boolean property. The wire byte lives in `tag.boolVal`, not in the value
+ * payload — `Property.toBytes` writes the tag with size=0 and an empty
+ * value buffer. The `value` accessor is a getter/setter over `tag.boolVal`
+ * so the two cannot go stale relative to each other.
+ */
 export class BoolProperty extends Property {
+  /**
+   * @param {object} [opts]
+   * @param {import('../tag.mjs').PropertyTag} [opts.tag]
+   * @param {boolean} [opts.value]
+   */
   constructor({ tag, value = false } = {}) {
     super({ tag });
     if (tag) tag.boolVal = value ? 1 : 0;
@@ -93,8 +106,19 @@ export class BoolProperty extends Property {
 }
 registerProperty('BoolProperty', BoolProperty);
 
-// ── StrProperty ─────────────────────────────────────────────────────────────
+/**
+ * UE FString property. Round-trips the wire-form encoding (`isUnicode`) and
+ * the null vs. empty-with-terminator distinction (`isNull`) so encoding is
+ * byte-identical.
+ */
 export class StrProperty extends Property {
+  /**
+   * @param {object} [opts]
+   * @param {import('../tag.mjs').PropertyTag} [opts.tag]
+   * @param {string}        [opts.value]
+   * @param {boolean}       [opts.isNull]    Only meaningful when `value === ''`. See `Writer.writeFString`.
+   * @param {boolean|null}  [opts.isUnicode] null = auto-detect on write.
+   */
   constructor({ tag, value = '', isNull = false, isUnicode = null } = {}) {
     super({ tag });
     this.value = value;
@@ -127,14 +151,20 @@ export class StrProperty extends Property {
 }
 registerProperty('StrProperty', StrProperty);
 
-// ── NameProperty / EnumProperty ─────────────────────────────────────────────
-//
-// Same wire layout (an FName); kept as separate classes so tag.type stays
-// round-trippable through the registry. Values are coerced to FName on
-// write so callers can assign a bare string and have it work. Static
-// methods use `new this(...)` so inherited `fromReader` / `fromJSON`
-// instantiate the right subclass.
+/**
+ * Shared base for NameProperty and EnumProperty (identical FName wire layout;
+ * kept as separate exports so `tag.type` round-trips through the registry).
+ * Values are coerced to {@link FName} on write so callers can assign a bare
+ * string and have it work.
+ *
+ * @internal
+ */
 class _FNameLeaf extends Property {
+  /**
+   * @param {object} [opts]
+   * @param {import('../tag.mjs').PropertyTag} [opts.tag]
+   * @param {FName|string|null} [opts.value]
+   */
   constructor({ tag, value = null } = {}) {
     super({ tag });
     this.value = value;
@@ -145,17 +175,24 @@ class _FNameLeaf extends Property {
   static fromJSON(j) { return new this({ tag: PropertyTag.fromJSON(j), value: FName.from(j.value) }); }
 }
 
+/** FName-valued property (e.g. an asset reference or a tag name). */
 export class NameProperty extends _FNameLeaf {}
+/** FName-valued enum property; the enum type lives on `tag.enumName`. */
 export class EnumProperty extends _FNameLeaf {}
 
 registerProperty('NameProperty', NameProperty);
 registerProperty('EnumProperty', EnumProperty);
 
-// ── ByteProperty ────────────────────────────────────────────────────────────
-//
-// Dual-form: when tag.enumName === 'None' the value is a raw u8; otherwise
-// it's an FName (the enum member).
+/**
+ * Dual-form property: when `tag.enumName === 'None'` the value is a raw
+ * `u8`; otherwise it's an {@link FName} naming an enum member.
+ */
 export class ByteProperty extends Property {
+  /**
+   * @param {object} [opts]
+   * @param {import('../tag.mjs').PropertyTag} [opts.tag]
+   * @param {number|FName|string} [opts.value]
+   */
   constructor({ tag, value = 0 } = {}) {
     super({ tag });
     this.value = value;

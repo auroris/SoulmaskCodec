@@ -12,6 +12,13 @@
 
 const CHUNK = 0x8000;
 
+/**
+ * Base64-encode a Uint8Array. Processes in 32 KB chunks to stay under
+ * `String.fromCharCode.apply`'s argument-count cap.
+ *
+ * @param {Uint8Array} u8
+ * @returns {string}
+ */
 export function b64encode(u8) {
   let bin = '';
   for (let i = 0; i < u8.length; i += CHUNK) {
@@ -20,6 +27,12 @@ export function b64encode(u8) {
   return btoa(bin);
 }
 
+/**
+ * Inverse of {@link b64encode}.
+ *
+ * @param {string} s
+ * @returns {Uint8Array}
+ */
 export function b64decode(s) {
   const bin = atob(s);
   const out = new Uint8Array(bin.length);

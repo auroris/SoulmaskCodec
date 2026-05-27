@@ -120,18 +120,47 @@ function codec(innerType) {
   return c;
 }
 
+/**
+ * Decode one element of `innerType` from the cursor.
+ *
+ * @param {import('./io.mjs').Cursor} cursor
+ * @param {string} innerType  UE inner-type name (e.g. `'IntProperty'`, `'ObjectProperty'`).
+ * @param {number} [sizeHint] Byte budget; only consulted by ObjectProperty-family handlers.
+ * @param {import('./property.mjs').DecodeCtx} [ctx]
+ * @returns {*}  Decoded element value.
+ * @throws {Error} on unsupported `innerType`.
+ */
 export function readElement(cursor, innerType, sizeHint, ctx) {
   return codec(innerType).read(cursor, sizeHint, ctx);
 }
 
+/**
+ * Encode one element of `innerType` onto the writer.
+ *
+ * @param {import('./io.mjs').Writer} writer
+ * @param {string} innerType
+ * @param {*}      value
+ * @param {object} [ctx]
+ * @throws {Error} on unsupported `innerType`.
+ */
 export function writeElement(writer, innerType, value, ctx) {
   codec(innerType).write(writer, value, ctx);
 }
 
+/**
+ * @param {*}      value
+ * @param {string} innerType
+ * @returns {*}  JSON-safe representation of `value`.
+ */
 export function elementToJSON(value, innerType) {
   return codec(innerType).toJSON(value);
 }
 
+/**
+ * @param {*}      j  JSON-form element.
+ * @param {string} innerType
+ * @returns {*}  Decoded element value, or an {@link OpaqueValue} when the JSON carried an opaque marker.
+ */
 export function elementFromJSON(j, innerType) {
   if (OpaqueValue.isOpaqueJSON(j)) return OpaqueValue.fromJSON(j);
   return codec(innerType).fromJSON(j);

@@ -18,7 +18,17 @@ import { Property, registerOpaqueFallback, warnOrThrow } from '../property.mjs';
 import { PropertyTag } from '../tag.mjs';
 import { b64encode, b64decode } from '../base64.mjs';
 
+/**
+ * Sub-value opaque carrier: bytes captured inside a container (array element,
+ * map value, struct field, text body) whose own decode failed while the
+ * surrounding shape stayed intact.
+ */
 export class OpaqueValue {
+  /**
+   * @param {object} [opts]
+   * @param {Uint8Array} [opts.bytes]
+   * @param {string|null} [opts.reason]  Free-form decode-failure reason for diagnostics.
+   */
   constructor({ bytes, reason = null } = {}) {
     this.bytes = bytes;
     this.reason = reason;
@@ -28,12 +38,18 @@ export class OpaqueValue {
    * Capture `sizeHint` bytes from `cursor` as opaque. The caller is
    * responsible for calling `warnOrThrow(ctx, ...)` first; this constructor
    * is just bytes-in, bytes-out.
+   *
+   * @param {import('../io.mjs').Cursor} cursor
+   * @param {number} sizeHint  Byte count to consume.
+   * @param {string|null} [reason]
+   * @returns {OpaqueValue}
    */
   static fromReader(cursor, sizeHint, reason) {
     const bytes = cursor.readBytes(sizeHint).slice();
     return new OpaqueValue({ bytes, reason });
   }
 
+  /** @param {import('../io.mjs').Writer} writer */
   toBytes(writer) {
     writer.writeBytes(this.bytes);
   }
@@ -42,16 +58,37 @@ export class OpaqueValue {
     return { _opaque: true, bytes: b64encode(this.bytes), reason: this.reason };
   }
 
+  /**
+   * @param {{bytes: string, reason?: string|null}} j
+   * @returns {OpaqueValue}
+   */
   static fromJSON(j) {
     return new OpaqueValue({ bytes: b64decode(j.bytes), reason: j.reason ?? null });
   }
 
+  /**
+   * Type guard: true iff `j` is the JSON shape produced by `toJSON`.
+   *
+   * @param {*} j
+   * @returns {boolean}
+   */
   static isOpaqueJSON(j) {
     return j && typeof j === 'object' && !Array.isArray(j) && j._opaque === true;
   }
 }
 
+/**
+ * Property-level opaque carrier: the entire property is captured verbatim
+ * when `tag.type.value` is unrecognized or a top-level value decode failed.
+ * Registered as the opaque fallback via `registerOpaqueFallback`.
+ */
 export class OpaqueProperty extends Property {
+  /**
+   * @param {object} [opts]
+   * @param {import('../tag.mjs').PropertyTag} [opts.tag]
+   * @param {Uint8Array} [opts.bytes]
+   * @param {string|null} [opts.reason]
+   */
   constructor({ tag, bytes, reason = null } = {}) {
     super({ tag });
     this.bytes = bytes;

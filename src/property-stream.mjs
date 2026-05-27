@@ -20,7 +20,19 @@
 import { Property, TerminatorProperty } from './property.mjs';
 import { FName } from './primitives.mjs';
 
+/**
+ * Ordered list of properties terminated by a `None` tag. The recursive unit
+ * of the codec: appears at the top level of an UnrealBlob, inside
+ * unknown-shape StructProperty values, inside ObjectRef.embedded, and as
+ * array/set/map struct elements.
+ */
 export class PropertyStream {
+  /**
+   * @param {object} [opts]
+   * @param {Property[]} [opts.properties]
+   * @param {boolean}    [opts.terminated]         True iff the wire data ended with a `None` tag.
+   * @param {boolean}    [opts.terminatorTrailer]  True iff a 4-byte FName.Number=0 trailer followed the `None`.
+   */
   constructor({ properties = [], terminated = false, terminatorTrailer = false } = {}) {
     this.properties = properties;
     this.terminated = terminated;
@@ -34,6 +46,13 @@ export class PropertyStream {
    * streams pass false; callers (e.g. ObjectRef) that detect a trailer in
    * the embedded byte budget set `terminatorTrailer` on the resulting
    * stream after the fact (see `attachTerminatorTrailer`).
+   *
+   * @param {import('./io.mjs').Cursor} cursor
+   * @param {number} [endOffset]  Absolute cursor offset at which to stop (default: read to EOF).
+   * @param {object} [opts]
+   * @param {boolean} [opts.consumeTerminatorTrailer]
+   * @param {object} [opts.ctx]  Decode context (e.g. `{ strict?: boolean }`).
+   * @returns {PropertyStream}
    */
   static fromReader(cursor, endOffset = Infinity, { consumeTerminatorTrailer = false, ctx = {} } = {}) {
     const properties = [];
@@ -58,6 +77,11 @@ export class PropertyStream {
    * Write the properties, then a None terminator. The trailer (4-byte
    * FName.Number=0) is emitted when `this.terminatorTrailer` is true OR
    * the caller passes `emitTerminatorTrailer: true` (top-level stream).
+   *
+   * @param {import('./io.mjs').Writer} writer
+   * @param {object}  [opts]
+   * @param {boolean} [opts.emitTerminatorTrailer]
+   * @param {object}  [opts.ctx]
    */
   toBytes(writer, { emitTerminatorTrailer = false, ctx = {} } = {}) {
     for (const p of this.properties) p.toBytes(writer, ctx);
@@ -67,6 +91,7 @@ export class PropertyStream {
     }
   }
 
+  /** @returns {object} */
   toJSON() {
     const j = { properties: this.properties.map(p => p.toJSON()) };
     if (this.terminated) j.terminated = true;
@@ -74,6 +99,10 @@ export class PropertyStream {
     return j;
   }
 
+  /**
+   * @param {object} j
+   * @returns {PropertyStream}
+   */
   static fromJSON(j) {
     return new PropertyStream({
       properties: (j.properties ?? []).map(p => Property.fromJSON(p)),
@@ -102,6 +131,9 @@ export class PropertyStream {
  * Limitation: only matches ANSI property names (SaveNum > 0). Every
  * Soulmask property name observed in world.db is ASCII; UTF-16 property
  * names inside Map<_,Struct> would need an additional branch.
+ *
+ * @param {import('./io.mjs').Cursor} cursor
+ * @returns {boolean}
  */
 export function peekLooksLikePropertyTag(cursor) {
   if (cursor.remaining() < 8) return false;

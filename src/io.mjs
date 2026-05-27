@@ -13,20 +13,44 @@
 const _LATIN1_DECODER  = new TextDecoder('latin1');
 const _UTF16LE_DECODER = new TextDecoder('utf-16le');
 
+/**
+ * Decoded FString return shape.
+ *
+ * @typedef  {object}  FStringRead
+ * @property {string}  value      Decoded string (empty for both null and empty-with-terminator forms).
+ * @property {boolean} isUnicode  True if the wire form used UTF-16 LE (negative SaveNum).
+ * @property {boolean} isNull     True if the wire form was SaveNum=0 (no payload) rather than empty-with-terminator.
+ */
+
+/**
+ * Forward-only reader over a Uint8Array. All multi-byte integers are
+ * little-endian. The cursor holds a direct DataView over the input bytes —
+ * no copy — and advances `offset` on every read.
+ */
 export class Cursor {
+  /**
+   * @param {Uint8Array} bytes     Backing buffer. Mutating it after construction is visible to subsequent reads.
+   * @param {number}     [offset] Starting absolute offset (default 0).
+   */
   constructor(bytes, offset = 0) {
     this.bytes = bytes;
     this.dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     this.offset = offset;
   }
+  /** Current absolute offset within the buffer. */
   pos()       { return this.offset; }
+  /** True iff the cursor is at or past the end of the buffer. */
   eof()       { return this.offset >= this.bytes.length; }
+  /** Bytes remaining between the cursor and the end of the buffer. */
   remaining() { return this.bytes.length - this.offset; }
 
   /**
    * Advance the cursor by `n` bytes. Throws RangeError if `n` is negative or
    * would take the cursor past the end of the buffer. Use `seek(n)` to jump
    * to an absolute offset (including backwards).
+   *
+   * @param {number} n  Non-negative number of bytes to skip.
+   * @throws {RangeError}
    */
   skip(n) {
     if (!Number.isFinite(n) || n < 0) {
@@ -42,6 +66,9 @@ export class Cursor {
    * Move the cursor to absolute offset `n`. Throws RangeError if `n` is out
    * of `[0, buffer.length]` (note: length is allowed; the cursor is then at
    * EOF and any further read would throw).
+   *
+   * @param {number} n  Absolute offset in `[0, buffer.length]`.
+   * @throws {RangeError}
    */
   seek(n) {
     if (!Number.isFinite(n) || n < 0 || n > this.bytes.length) {
@@ -75,6 +102,9 @@ export class Cursor {
    * buffer: mutating it mutates the buffer, and the view becomes stale if
    * the buffer is detached. Callers that need to retain the bytes past the
    * buffer's lifetime should `.slice()` the result.
+   *
+   * @param {number} n  Number of bytes to read.
+   * @returns {Uint8Array} Subarray view, length `n`.
    */
   readBytes(n)  { const out = this.bytes.subarray(this.offset, this.offset + n); this.offset += n; return out; }
 
@@ -91,6 +121,8 @@ export class Cursor {
    * Both produce the same JS value (""), but to round-trip byte-identical
    * we need to know which one was on the wire. That distinction lives in
    * `isNull` on the return value.
+   *
+   * @returns {FStringRead}
    */
   readFString() {
     const saveNum = this.readInt32();
@@ -105,14 +137,30 @@ export class Cursor {
   }
 }
 
+/**
+ * Forward-only writer that grows its backing buffer on demand. All multi-byte
+ * integers are written little-endian. Internal callers capture the result of
+ * `pos()` before reserving a length placeholder and later use
+ * `backpatchInt32` to fill it in once the actual size is known.
+ */
 export class Writer {
+  /**
+   * @param {number} [initialCapacity]  Starting buffer size in bytes (default 256). Buffer doubles when exhausted.
+   */
   constructor(initialCapacity = 256) {
     this.buffer = new ArrayBuffer(initialCapacity);
     this.bytes = new Uint8Array(this.buffer);
     this.dv = new DataView(this.buffer);
     this.offset = 0;
   }
+  /** Current absolute write offset. Capture this before reserving a placeholder slot. */
   pos() { return this.offset; }
+  /**
+   * Snapshot the written bytes as a fresh Uint8Array. The writer can be
+   * reused after this call but the returned buffer is independent.
+   *
+   * @returns {Uint8Array}
+   */
   finalize() { return this.bytes.slice(0, this.offset); }
 
   _ensure(n) {
@@ -134,6 +182,9 @@ export class Writer {
    * the buffer), then patch in the actual size. Resizing the buffer
    * preserves the prefix bytes, so an earlier-captured position stays
    * valid through any number of intervening writes.
+   *
+   * @param {number} pos    Absolute byte offset of the placeholder.
+   * @param {number} value  Int32 value to write (`| 0` coerced).
    */
   backpatchInt32(pos, value) { this.dv.setInt32(pos, value | 0, true); }
 
@@ -151,12 +202,21 @@ export class Writer {
    * via `BigInt(largeNumber)`. The codec's decoders return I64/U64 values as
    * strings for this reason; this guard catches accidental mutation that
    * substitutes an unsafe Number.
+   *
+   * @param {bigint|string|number} v
+   * @throws {RangeError|TypeError}
    */
   writeUint64(v)  { this._ensure(8); this.dv.setBigUint64(this.offset, _toBigInt64(v, 'Writer.writeUint64'), true); this.offset += 8; }
-  /** Signed 64-bit integer. See writeUint64 for accepted value forms. */
+  /**
+   * Signed 64-bit integer. See {@link Writer.writeUint64} for accepted value forms.
+   *
+   * @param {bigint|string|number} v
+   * @throws {RangeError|TypeError}
+   */
   writeInt64(v)   { this._ensure(8); this.dv.setBigInt64(this.offset, _toBigInt64(v, 'Writer.writeInt64'), true); this.offset += 8; }
   writeFloat32(v) { this._ensure(4); this.dv.setFloat32(this.offset, v, true);      this.offset += 4; }
   writeFloat64(v) { this._ensure(8); this.dv.setFloat64(this.offset, v, true);      this.offset += 8; }
+  /** @param {Uint8Array} u8  Bytes to append verbatim. */
   writeBytes(u8)  { this._ensure(u8.length); this.bytes.set(u8, this.offset);       this.offset += u8.length; }
 
   /**
@@ -173,6 +233,10 @@ export class Writer {
    * `isUnicode` is auto-detected from the content when not supplied. For
    * an empty-with-terminator string the caller picks the encoding via
    * `isUnicode` (defaults to ANSI).
+   *
+   * @param {string|null|undefined} value
+   * @param {boolean|null} [isUnicode]  Force ANSI/UTF-16; null = auto-detect from content.
+   * @param {boolean|null} [isNull]     For empty `value` only: pick null vs. empty-with-terminator form.
    */
   writeFString(value, isUnicode = null, isNull = null) {
     // Null form: no payload bytes.
@@ -217,6 +281,12 @@ export class Writer {
  * |v| > 2^53. The decoder paths return I64/U64 values as decimal strings
  * specifically to avoid this; tightening the writer's contract catches
  * accidental round-trip-breaking mutation at the source.
+ *
+ * @internal
+ * @param {bigint|string|number} v
+ * @param {string} fnName  Caller name for error messages.
+ * @returns {bigint}
+ * @throws {RangeError|TypeError}
  */
 function _toBigInt64(v, fnName) {
   if (typeof v === 'bigint') return v;

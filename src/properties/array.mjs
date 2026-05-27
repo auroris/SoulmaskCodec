@@ -42,7 +42,21 @@ import { PropertyTag } from '../tag.mjs';
 import { StructValue, STRUCT_HANDLERS } from './struct.mjs';
 import { readElement, writeElement, elementToJSON, elementFromJSON, OBJECT_INNER_TYPES } from '../element-codec.mjs';
 
+/**
+ * UE ArrayProperty: a homogeneous array of values whose inner type is
+ * declared in `tag.innerType`. `elements` is a plain JS array of decoded
+ * values (numbers, strings, FNames, {@link ObjectRef}, {@link StructValue},
+ * etc., depending on `innerType`).
+ */
 export class ArrayProperty extends Property {
+  /**
+   * @param {object} [opts]
+   * @param {import('../tag.mjs').PropertyTag} [opts.tag]
+   * @param {any[]}        [opts.elements]
+   * @param {import('../tag.mjs').PropertyTag|null} [opts.innerTag]            Inner element tag for `Array<StructProperty>`.
+   * @param {number|null}  [opts.innerTagSize]                                 Wire `innerTag.size` (captured for byte-identical round-trip).
+   * @param {Array<{transforms: any[], ids: any[], aux: any[]}|null>|null} [opts.perElementTrailings] Placement-binary blocks for the JianZhuInstYuanXings array shape; null in the normal case.
+   */
   constructor({ tag, elements = [], innerTag = null, innerTagSize = null, perElementTrailings = null } = {}) {
     super({ tag });
     this.elements = elements;

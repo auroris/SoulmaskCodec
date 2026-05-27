@@ -16,6 +16,12 @@
 import { registerProperty, warnOrThrow } from '../property.mjs';
 import { OpaqueProperty } from './opaque.mjs';
 
+/**
+ * UE DelegateProperty. Wire bytes are captured verbatim by the
+ * {@link OpaqueProperty} base; this subclass exists so `tag.type` round-trips
+ * and so the warn message names the delegate family rather than reporting
+ * "unknown type".
+ */
 export class DelegateProperty extends OpaqueProperty {
   static fromReader(cursor, tag, sizeHint, ctx) {
     const reason = `${tag.type.value} (recognized; structured decode not yet implemented)`;
@@ -25,8 +31,11 @@ export class DelegateProperty extends OpaqueProperty {
   }
 }
 
+/** UE MulticastDelegateProperty alias of {@link DelegateProperty}. */
 export class MulticastDelegateProperty             extends DelegateProperty {}
+/** UE MulticastInlineDelegateProperty alias of {@link DelegateProperty}. */
 export class MulticastInlineDelegateProperty       extends DelegateProperty {}
+/** UE MulticastSparseDelegateProperty alias of {@link DelegateProperty}. */
 export class MulticastSparseDelegateProperty       extends DelegateProperty {}
 
 registerProperty('DelegateProperty',                  DelegateProperty);

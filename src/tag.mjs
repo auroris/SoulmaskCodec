@@ -62,7 +62,31 @@ const TAG_EXTRAS = {
 TAG_EXTRAS.EnumProperty = TAG_EXTRAS.ByteProperty;
 TAG_EXTRAS.SetProperty  = TAG_EXTRAS.ArrayProperty;
 
+/**
+ * Header preceding each property's value bytes. Carries the property's
+ * name, type, byte size, and any per-type extension fields (struct name,
+ * inner type for arrays, bool value, enum name, etc.).
+ *
+ * Construct directly only when synthesizing a property (e.g. in tests);
+ * normal use is through {@link PropertyTag.fromReader} or
+ * {@link PropertyTag.fromJSON}.
+ */
 export class PropertyTag {
+  /**
+   * @param {object} [fields]
+   * @param {import('./primitives.mjs').FName|null} [fields.name]
+   * @param {import('./primitives.mjs').FName|null} [fields.type]
+   * @param {number}                                [fields.arrayIndex]
+   * @param {import('./primitives.mjs').FName|null} [fields.structName]
+   * @param {import('./primitives.mjs').FGuid|null} [fields.structGuid]
+   * @param {number|null}                           [fields.boolVal]
+   * @param {import('./primitives.mjs').FName|null} [fields.enumName]
+   * @param {import('./primitives.mjs').FName|null} [fields.innerType]
+   * @param {import('./primitives.mjs').FName|null} [fields.valueType]
+   * @param {boolean}                               [fields.hasPropertyGuid]
+   * @param {import('./primitives.mjs').FGuid|null} [fields.propertyGuid]
+   * @param {boolean}                               [fields.isTerminator]
+   */
   constructor(fields = {}) {
     this.name = fields.name ?? null;
     this.type = fields.type ?? null;
@@ -82,6 +106,9 @@ export class PropertyTag {
    * Read a PropertyTag from the cursor. The wire `size` field is captured
    * in `tag._readSize` (transient — used by Property.fromReader as the
    * value-decoding byte budget, then discarded).
+   *
+   * @param {import('./io.mjs').Cursor} cursor
+   * @returns {PropertyTag}
    */
   static fromReader(cursor) {
     const name = FName.fromReader(cursor);
@@ -110,6 +137,9 @@ export class PropertyTag {
    * returns -1 so the caller can branch (though in practice terminator
    * tags are emitted directly via `new FName('None').toBytes(writer)` and
    * don't pass through this method).
+   *
+   * @param {import('./io.mjs').Writer} writer
+   * @returns {number} Absolute writer offset of the size placeholder, or -1 for terminator tags.
    */
   toBytes(writer) {
     this.name.toBytes(writer);
@@ -124,6 +154,13 @@ export class PropertyTag {
     return sizePos;
   }
 
+  /**
+   * Flat JSON shape: tag fields and the relevant TAG_EXTRAS entries are
+   * spread into a single object so it merges cleanly with the per-property
+   * value JSON. Inverse of {@link PropertyTag.fromJSON}.
+   *
+   * @returns {object}
+   */
   toJSON() {
     const j = { name: this.name.toJSON(), type: this.type.toJSON() };
     if (this.arrayIndex) j.arrayIndex = this.arrayIndex;
@@ -135,6 +172,12 @@ export class PropertyTag {
     return j;
   }
 
+  /**
+   * Reconstruct a PropertyTag from the JSON shape produced by `toJSON`.
+   *
+   * @param {object} j
+   * @returns {PropertyTag}
+   */
   static fromJSON(j) {
     const tag = new PropertyTag({
       name: FName.from(j.name),

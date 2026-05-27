@@ -1,0 +1,18 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "plugin": ["typedoc-plugin-markdown"],
+  "entryPoints": [
+    "src/wscodec.mjs",
+    "src/io.mjs",
+    "src/primitives.mjs",
+    "src/translations.mjs"
+  ],
+  "out": "./docs",
+  "readme": "none",
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "sort": ["source-order"],
+  "hideGenerator": true,
+  "githubPages": false,
+  "intentionallyNotExported": ["_FNameLeaf"]
+}

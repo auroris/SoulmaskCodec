@@ -30,7 +30,19 @@ import { peekLooksLikePropertyTag } from '../property-stream.mjs';
 import { StructValue } from './struct.mjs';
 import { readElement, writeElement, elementToJSON, elementFromJSON } from '../element-codec.mjs';
 
+/**
+ * UE MapProperty: an ordered list of key/value entries preceded by a
+ * "keys to remove" list. Key and value wire shapes depend on
+ * `tag.innerType` / `tag.valueType`; both struct-typed sides peek-disambiguate
+ * between a raw FGuid and a nested property stream.
+ */
 export class MapProperty extends Property {
+  /**
+   * @param {object} [opts]
+   * @param {import('../tag.mjs').PropertyTag} [opts.tag]
+   * @param {any[]}      [opts.removed]
+   * @param {{key: any, value: any}[]} [opts.entries]
+   */
   constructor({ tag, removed = [], entries = [] } = {}) {
     super({ tag });
     this.removed = removed;

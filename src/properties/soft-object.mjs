@@ -12,12 +12,25 @@
 import { Property, registerProperty } from '../property.mjs';
 import { PropertyTag } from '../tag.mjs';
 
+/**
+ * Decoded SoftObjectProperty value: an `assetPath` plus an optional `subPath`
+ * pointing inside a level / sublevel.
+ */
 export class SoftObjectRef {
+  /**
+   * @param {object} [opts]
+   * @param {string} [opts.assetPath]
+   * @param {string} [opts.subPath]
+   */
   constructor({ assetPath = '', subPath = '' } = {}) {
     this.assetPath = assetPath;
     this.subPath = subPath;
   }
 
+  /**
+   * @param {import('../io.mjs').Cursor} cursor
+   * @returns {SoftObjectRef}
+   */
   static fromReader(cursor) {
     return new SoftObjectRef({
       assetPath: cursor.readFString().value,
@@ -25,16 +38,30 @@ export class SoftObjectRef {
     });
   }
 
+  /** @param {import('../io.mjs').Writer} writer */
   toBytes(writer) {
     writer.writeFString(this.assetPath);
     writer.writeFString(this.subPath);
   }
 
   toJSON() { return { assetPath: this.assetPath, subPath: this.subPath }; }
+  /**
+   * @param {{assetPath: string, subPath: string}} j
+   * @returns {SoftObjectRef}
+   */
   static fromJSON(j) { return new SoftObjectRef({ assetPath: j.assetPath, subPath: j.subPath }); }
 }
 
+/**
+ * UE SoftObjectProperty: a soft (asset-path-based) reference. Value is a
+ * {@link SoftObjectRef}.
+ */
 export class SoftObjectProperty extends Property {
+  /**
+   * @param {object} [opts]
+   * @param {import('../tag.mjs').PropertyTag} [opts.tag]
+   * @param {SoftObjectRef|null} [opts.value]
+   */
   constructor({ tag, value = null } = {}) {
     super({ tag });
     this.value = value;   // SoftObjectRef
@@ -49,8 +76,10 @@ export class SoftObjectProperty extends Property {
   }
 }
 
-// SoftClassProperty has the same wire layout as SoftObjectProperty (UE just
-// uses a different declared type in the tag). Subclass for tag.type symmetry.
+/**
+ * UE SoftClassProperty: identical wire layout to {@link SoftObjectProperty};
+ * separate class so `tag.type` round-trips faithfully.
+ */
 export class SoftClassProperty extends SoftObjectProperty {
   static fromReader(cursor, tag) {
     return new SoftClassProperty({ tag, value: SoftObjectRef.fromReader(cursor) });

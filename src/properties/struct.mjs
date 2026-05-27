@@ -81,6 +81,10 @@ export const STRUCT_HANDLERS = {
  * STRUCT_HANDLERS directly; this validates handler shape. Without a
  * handler, an unknown struct name falls through to the property-stream
  * path.
+ *
+ * @param {string} name  Struct name (matches `tag.structName.value`).
+ * @param {{read: (cursor: import('../io.mjs').Cursor) => any, write: (writer: import('../io.mjs').Writer, value: any) => void}} handler
+ * @throws {TypeError} on invalid handler shape.
  */
 export function registerStructHandler(name, handler) {
   if (typeof name !== 'string' || name.length === 0) {
@@ -92,8 +96,25 @@ export function registerStructHandler(name, handler) {
   STRUCT_HANDLERS[name] = handler;
 }
 
-// ── StructValue ─────────────────────────────────────────────────────────────
+/**
+ * Decoded struct value carrying one of three wire forms:
+ * - `'binary'`: a plain object produced by a registered {@link STRUCT_HANDLERS} entry.
+ * - `'propStream'`: a nested {@link PropertyStream} terminated by `None`.
+ * - `'decodeError'`: a non-strict fallback that captures the raw element bytes as `opaqueTail`.
+ *
+ * Used by {@link StructProperty}, `ArrayProperty<Struct>` elements, and
+ * `MapProperty<_, Struct>` entry values.
+ */
 export class StructValue {
+  /**
+   * @param {string} structName
+   * @param {object} [opts]
+   * @param {'binary'|'propStream'|'decodeError'|null} [opts.form]
+   * @param {*}                  [opts.binaryValue]  Plain object/string/{@link FGuid} for `'binary'` form.
+   * @param {PropertyStream|null} [opts.stream]      Nested stream for `'propStream'` form.
+   * @param {string|null}        [opts.decodeError]  Error message for `'decodeError'` form.
+   * @param {Uint8Array|null}    [opts.opaqueTail]   Captured raw bytes for `'decodeError'` form.
+   */
   constructor(structName, {
     form = null,
     binaryValue = null,
@@ -111,6 +132,7 @@ export class StructValue {
     this.opaqueTail = opaqueTail;
   }
 
+  /** True iff {@link STRUCT_HANDLERS} has a binary handler for this struct name. */
   get isKnownBinary() { return STRUCT_HANDLERS[this.structName] != null; }
 
   /**
@@ -118,6 +140,14 @@ export class StructValue {
    * is consulted before dispatching to a registered binary handler — used
    * inside Map<_,Struct> value reads where Soulmask encodes some
    * known-binary structs as tagged streams.
+   *
+   * @param {import('../io.mjs').Cursor} cursor
+   * @param {string} structName
+   * @param {number} sizeHint  Tag size budget, or `Infinity` for loose container budgets.
+   * @param {object} [ctx]  Decode context (e.g. `{ strict?: boolean }`).
+   * @param {object}  [opts]
+   * @param {boolean} [opts.peekTagged]
+   * @returns {StructValue}
    */
   static fromReader(cursor, structName, sizeHint, ctx, { peekTagged = false } = {}) {
     const handler = STRUCT_HANDLERS[structName];
@@ -158,12 +188,24 @@ export class StructValue {
    * Read a struct value WITHOUT consulting STRUCT_HANDLERS (always uses
    * the property-stream path). Used by Map<Struct,Struct> entry values
    * once the peek heuristic has decided the bytes are tagged.
+   *
+   * @param {import('../io.mjs').Cursor} cursor
+   * @param {string} structName
+   * @param {object} [ctx]  Decode context (e.g. `{ strict?: boolean }`).
+   * @returns {StructValue}
    */
   static fromReaderTagged(cursor, structName, ctx) {
     const stream = PropertyStream.fromReader(cursor, Infinity, { ctx });
     return new StructValue(structName, { form: 'propStream', stream });
   }
 
+  /**
+   * Dispatch on `this.form` and emit the appropriate wire shape.
+   *
+   * @param {import('../io.mjs').Writer} writer
+   * @param {object} [ctx]
+   * @throws {Error} on unknown form or missing binary handler.
+   */
   toBytes(writer, ctx = {}) {
     if (this.form === 'binary') {
       const handler = STRUCT_HANDLERS[this.structName];
@@ -237,8 +279,16 @@ export class StructValue {
   }
 }
 
-// ── StructProperty ──────────────────────────────────────────────────────────
+/**
+ * UE StructProperty: a nested record. Value is a {@link StructValue} carrying
+ * either a binary record (known struct type) or a nested PropertyStream.
+ */
 export class StructProperty extends Property {
+  /**
+   * @param {object} [opts]
+   * @param {import('../tag.mjs').PropertyTag} [opts.tag]
+   * @param {StructValue|null} [opts.value]
+   */
   constructor({ tag, value = null } = {}) {
     super({ tag });
     this.value = value;  // StructValue

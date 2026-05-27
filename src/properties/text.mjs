@@ -56,7 +56,41 @@ import { FName } from '../primitives.mjs';
 import { OpaqueValue } from './opaque.mjs';
 import { b64encode, b64decode } from '../base64.mjs';
 
+/**
+ * Decoded FText. The active fields depend on `historyType`:
+ *
+ * - `-1` (None / culture-invariant): `displayString`, `displayStringIsNull`.
+ * - `0`  (Base / localized): `namespace`, `key`, `sourceString` (+isNull pairs).
+ * - `1`  (NamedFormat): `sourceFmt`, `arguments` of `{key, keyIsNull, type, value}`.
+ * - `2`  (OrderedFormat): `sourceFmt`, `arguments` of `{type, value}`.
+ * - `4`  (AsNumber): `sourceValue`, `formatOptions`, `culture`.
+ * - `11` (StringTableEntry): `tableId` (FName), `tableKey` (FString).
+ * - other: opaque `_raw` bytes captured for verbatim round-trip.
+ */
 export class FTextValue {
+  /**
+   * @param {object} [opts]
+   * @param {number}  [opts.flags]
+   * @param {number}  [opts.historyType]
+   * @param {string|null} [opts.displayString]
+   * @param {boolean} [opts.displayStringIsNull]
+   * @param {string}  [opts.namespace]
+   * @param {boolean} [opts.namespaceIsNull]
+   * @param {string}  [opts.key]
+   * @param {boolean} [opts.keyIsNull]
+   * @param {string|null} [opts.sourceString]
+   * @param {boolean} [opts.sourceStringIsNull]
+   * @param {FTextValue|null} [opts.sourceFmt]
+   * @param {Array<object>}   [opts.arguments]
+   * @param {{type: number, value: *}|null} [opts.sourceValue]
+   * @param {object|null} [opts.formatOptions]
+   * @param {string|null} [opts.culture]
+   * @param {boolean} [opts.cultureIsNull]
+   * @param {FName|null}  [opts.tableId]
+   * @param {string}      [opts.tableKey]
+   * @param {boolean}     [opts.tableKeyIsNull]
+   * @param {Uint8Array|null} [opts._raw]
+   */
   constructor({
     flags = 0, historyType = -1,
     displayString, displayStringIsNull = false,
@@ -100,7 +134,12 @@ export class FTextValue {
     }
   }
 
-  /** Best displayable string for this FText, or null if none. */
+  /**
+   * Best displayable string for this FText, or null if none. Walks
+   * historyType-specific fields to find a text-bearing value.
+   *
+   * @returns {string|null}
+   */
   get text() {
     if (this.historyType === -1) return this.displayString;
     if (this.historyType === 0)  return this.sourceString ?? null;
@@ -119,6 +158,12 @@ export class FTextValue {
    * TextProperty value or inside a finite-budget container; pass `Infinity`
    * when reading inside a self-delimiting context (array element, struct
    * field) and an unknown historyType cannot be captured.
+   *
+   * @param {import('../io.mjs').Cursor} cursor
+   * @param {number} sizeHint
+   * @param {object} [ctx]  Decode context (e.g. `{ strict?: boolean }`).
+   * @returns {FTextValue}
+   * @throws {Error} on unimplemented historyType with no size budget.
    */
   static fromReader(cursor, sizeHint, ctx) {
     const start = cursor.pos();
@@ -366,7 +411,16 @@ export class FTextValue {
   }
 }
 
+/**
+ * UE TextProperty: wraps an {@link FTextValue} (or an
+ * {@link OpaqueValue} fallback when decode failed under non-strict mode).
+ */
 export class TextProperty extends Property {
+  /**
+   * @param {object} [opts]
+   * @param {import('../tag.mjs').PropertyTag} [opts.tag]
+   * @param {FTextValue|OpaqueValue|null} [opts.value]
+   */
   constructor({ tag, value = null } = {}) {
     super({ tag });
     // value is FTextValue OR OpaqueValue (when decode failed under non-strict).

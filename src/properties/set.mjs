@@ -27,7 +27,18 @@ import { peekLooksLikePropertyTag } from '../property-stream.mjs';
 import { StructValue } from './struct.mjs';
 import { readElement, writeElement, elementToJSON, elementFromJSON } from '../element-codec.mjs';
 
+/**
+ * UE SetProperty: a homogeneous unordered collection. `removed` carries the
+ * delta-list that precedes the active entries on the wire (often empty in
+ * Soulmask saves but always present in the layout).
+ */
 export class SetProperty extends Property {
+  /**
+   * @param {object} [opts]
+   * @param {import('../tag.mjs').PropertyTag} [opts.tag]
+   * @param {any[]} [opts.removed]
+   * @param {any[]} [opts.elements]
+   */
   constructor({ tag, removed = [], elements = [] } = {}) {
     super({ tag });
     this.removed = removed;

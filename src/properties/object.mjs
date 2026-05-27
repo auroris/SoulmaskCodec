@@ -31,7 +31,23 @@ import { Property, registerProperty, warnOrThrow } from '../property.mjs';
 import { PropertyTag } from '../tag.mjs';
 import { PropertyStream } from '../property-stream.mjs';
 
+/**
+ * Decoded ObjectProperty value. Carries every wire-form variant — kind-only,
+ * +path, +path+classPath, +embedded PropertyStream — plus the Soulmask
+ * `kindOnePrefix` u32 (semantic unknown, replayed verbatim).
+ */
 export class ObjectRef {
+  /**
+   * @param {object} [opts]
+   * @param {number}      [opts.kind]                  Wire kind byte (0x03 = path; 0x01 = Soulmask actor ref; 0 = null).
+   * @param {number|null} [opts.kindOnePrefix]         u32 following a kind=0x01 byte. null = "not on the wire".
+   * @param {string|null} [opts.path]                  null = the FString wasn't on the wire.
+   * @param {boolean}     [opts.pathIsNull]            Wire FString null-form vs. empty-with-terminator.
+   * @param {string|null} [opts.classPath]             null = not on wire.
+   * @param {boolean}     [opts.classPathIsNull]
+   * @param {import('../property-stream.mjs').PropertyStream|null} [opts.embedded]
+   * @param {boolean}     [opts.hasTerminatorTrailer]  Embedded stream's None terminator carried a 4-byte trailer.
+   */
   constructor({
     kind = 0x03,
     kindOnePrefix = null,
@@ -59,12 +75,18 @@ export class ObjectRef {
     this.hasTerminatorTrailer = hasTerminatorTrailer;
   }
 
+  /** True iff `embedded` is a non-null {@link PropertyStream}. */
   get hasEmbedded() { return this.embedded instanceof PropertyStream; }
 
   /**
    * Top-level read: `sizeHint` is the tight per-property byte budget from
    * the tag. The reader steps through kind / kindOnePrefix / path /
    * classPath / embedded, falling out at each "exhausted budget" check.
+   *
+   * @param {import('../io.mjs').Cursor} cursor
+   * @param {number} sizeHint  Tag size budget for the value bytes.
+   * @param {object} [ctx]  Decode context (e.g. `{ strict?: boolean }`).
+   * @returns {ObjectRef}
    */
   static fromReaderTopLevel(cursor, sizeHint, ctx) {
     const start = cursor.pos();
@@ -138,6 +160,11 @@ export class ObjectRef {
    *            paths are always "/Script/..." or "/Game/...").
    *   Guard 4: bytes following classPath don't look like a PropertyTag
    *            start (small ANSI saveNum + identifier-start byte).
+   *
+   * @param {import('../io.mjs').Cursor} cursor
+   * @param {number} sizeHint  Remaining array byte budget (NOT a per-element bound).
+   * @param {object} [ctx]  Decode context (e.g. `{ strict?: boolean }`).
+   * @returns {ObjectRef}
    */
   static fromReaderArrayElement(cursor, sizeHint, ctx) {
     const start = cursor.pos();
@@ -266,6 +293,16 @@ export class ObjectRef {
     });
   }
 
+  /**
+   * Emit the wire form that matches which fields were captured at read time
+   * (or set programmatically). The kind byte is always emitted; subsequent
+   * fields are written only when present.
+   *
+   * @param {import('../io.mjs').Writer} writer
+   * @param {object} [opts]
+   * @param {boolean} [opts.requireClassPath]  Force emission of classPath even when it's null (used by container codecs that need positional fields).
+   * @param {object}  [opts.ctx]
+   */
   toBytes(writer, { requireClassPath = false, ctx = {} } = {}) {
     writer.writeUint8(this.kind ?? 0x03);
     if (this.kindOnePrefix !== null && this.kindOnePrefix !== undefined) {
@@ -282,6 +319,7 @@ export class ObjectRef {
     }
   }
 
+  /** @returns {object} */
   toJSON() {
     const j = { kind: this.kind };
     if (this.kindOnePrefix != null) j.kindOnePrefix = this.kindOnePrefix;
@@ -294,6 +332,10 @@ export class ObjectRef {
     return j;
   }
 
+  /**
+   * @param {object} j
+   * @returns {ObjectRef}
+   */
   static fromJSON(j) {
     return new ObjectRef({
       kind: j.kind,
@@ -308,7 +350,16 @@ export class ObjectRef {
   }
 }
 
+/**
+ * UE ObjectProperty: a reference to another UObject. The value is an
+ * {@link ObjectRef} carrying whichever fields were on the wire.
+ */
 export class ObjectProperty extends Property {
+  /**
+   * @param {object} [opts]
+   * @param {import('../tag.mjs').PropertyTag} [opts.tag]
+   * @param {ObjectRef|null} [opts.value]
+   */
   constructor({ tag, value = null } = {}) {
     super({ tag });
     this.value = value;   // ObjectRef
@@ -328,9 +379,14 @@ export class ObjectProperty extends Property {
 }
 
 // Aliases: same wire layout, different declared type in the tag.
+
+/** UE ClassProperty alias of {@link ObjectProperty}. */
 export class ClassProperty       extends ObjectProperty {}
+/** UE WeakObjectProperty alias of {@link ObjectProperty}. */
 export class WeakObjectProperty  extends ObjectProperty {}
+/** UE LazyObjectProperty alias of {@link ObjectProperty}. */
 export class LazyObjectProperty  extends ObjectProperty {}
+/** Soulmask WSObjectProperty alias of {@link ObjectProperty}. */
 export class WSObjectProperty    extends ObjectProperty {}
 
 registerProperty('ObjectProperty',     ObjectProperty);
