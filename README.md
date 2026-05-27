@@ -192,6 +192,7 @@ Without an argument they look for `../world.db` relative to the repo root
 
 ```sh
 npm test                    # runs every test:* script in package.json
+npm run test:peek-fuzz      # adversarial fuzz for the FGuid-vs-tag peek heuristic
 npm run test:roundtrip      # decode + re-encode every row, byte-identical check
 npm run test:json-spot      # JSON round-trip on representative rows
 npm run test:json-full      # JSON round-trip on every row

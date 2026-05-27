@@ -27,7 +27,7 @@
  * 4 B) and empty-with-terminator (SaveNum=1, 5 B).
  */
 
-import { Property, registerProperty } from '../property.mjs';
+import { Property, registerProperty, warnOrThrow } from '../property.mjs';
 import { PropertyTag } from '../tag.mjs';
 import { PropertyStream } from '../property-stream.mjs';
 
@@ -96,6 +96,18 @@ export class ObjectRef {
     if (stream.terminated && cursor.pos() + 4 === start + sizeHint && cursor.remaining() >= 4) {
       cursor.skip(4);
       hasTerminatorTrailer = true;
+    }
+    // Top-level ObjectRef: the embedded stream's None terminator is part
+    // of the on-wire shape (always followed by either an aligned end-of-
+    // budget OR a 4-byte FName.Number trailer). A non-terminated stream
+    // means we ran off the tag's size budget without seeing None — bytes
+    // are malformed or the size hint is wrong. Outer Property reader will
+    // throw on size mismatch anyway; this localizes the cause.
+    if (!stream.terminated) {
+      warnOrThrow(ctx,
+        `ObjectRef[topLevel] at offset ${start}: embedded stream did not terminate ` +
+        `within size budget ${sizeHint} (cursor at ${cursor.pos() - start}/${sizeHint}). ` +
+        `Likely a malformed embedded stream or wrong tag size.`);
     }
     return new ObjectRef({ kind, kindOnePrefix,
       path: pathFS.value, pathIsNull: pathFS.isNull,
@@ -234,6 +246,17 @@ export class ObjectRef {
         cursor.skip(4);
         hasTerminatorTrailer = true;
       }
+    }
+    // Guard 4 should have ruled out non-tagged bytes before we got here.
+    // If the stream nevertheless ran off the loose budget without seeing
+    // None, one of the four guards misfired or the array's value budget
+    // is wrong. Flag the element so the array's cumulative size mismatch
+    // points at the right element.
+    if (!stream.terminated) {
+      warnOrThrow(ctx,
+        `ObjectRef[arrayElement] at offset ${start}: embedded stream did not terminate ` +
+        `within element budget ${sizeHint} (cursor at ${cursor.pos() - start}/${sizeHint}). ` +
+        `One of the four heuristic guards likely misclassified the bytes.`);
     }
     return new ObjectRef({
       kind, kindOnePrefix,

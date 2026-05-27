@@ -20,7 +20,7 @@
  * path + optional classPath).
  */
 
-import { Property, registerProperty } from '../property.mjs';
+import { Property, registerProperty, warnOrThrow } from '../property.mjs';
 import { PropertyTag } from '../tag.mjs';
 import { FGuid } from '../primitives.mjs';
 import { peekLooksLikePropertyTag } from '../property-stream.mjs';
@@ -78,7 +78,17 @@ registerProperty('SetProperty', SetProperty);
 function _readSetElement(cursor, innerType, ctx) {
   if (innerType === 'StructProperty') {
     if (peekLooksLikePropertyTag(cursor)) {
-      return StructValue.fromReaderTagged(cursor, '(set element)', ctx);
+      const startOff = cursor.pos();
+      const sv = StructValue.fromReaderTagged(cursor, '(set element)', ctx);
+      // Mirrors map.mjs: a peek-chosen tagged stream MUST terminate with
+      // None. A non-terminated stream signals a peek misfire (FGuid bytes
+      // that happened to look identifier-shaped) — flag with location.
+      if (!sv.stream.terminated) {
+        warnOrThrow(ctx,
+          `SetProperty: element tagged stream at offset ${startOff} ` +
+          `did not terminate (peek heuristic likely misfired on FGuid bytes).`);
+      }
+      return sv;
     }
     return FGuid.fromReader(cursor).value;
   }

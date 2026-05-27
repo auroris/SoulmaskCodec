@@ -23,7 +23,7 @@
  * delegate to the shared element-codec.
  */
 
-import { Property, registerProperty } from '../property.mjs';
+import { Property, registerProperty, warnOrThrow } from '../property.mjs';
 import { PropertyTag } from '../tag.mjs';
 import { FGuid } from '../primitives.mjs';
 import { peekLooksLikePropertyTag } from '../property-stream.mjs';
@@ -103,7 +103,20 @@ registerProperty('MapProperty', MapProperty);
 function _readMapElement(cursor, type, isKey, ctx) {
   if (type === 'StructProperty') {
     if (peekLooksLikePropertyTag(cursor)) {
-      return StructValue.fromReaderTagged(cursor, isKey ? '(map key)' : '(map value)', ctx);
+      const startOff = cursor.pos();
+      const sv = StructValue.fromReaderTagged(cursor, isKey ? '(map key)' : '(map value)', ctx);
+      // Peek said "tagged stream", which MUST terminate with a None tag.
+      // A non-terminated stream means the peek misfired (we treated random
+      // bytes — most likely the start of an FGuid — as a property name)
+      // and the recursive Property reader walked off into garbage until
+      // EOF. Flag at the call site so the failure points at the map entry
+      // rather than the surrounding property's size mismatch.
+      if (!sv.stream.terminated) {
+        warnOrThrow(ctx,
+          `MapProperty: ${isKey ? 'key' : 'value'} tagged stream at offset ${startOff} ` +
+          `did not terminate (peek heuristic likely misfired on FGuid bytes).`);
+      }
+      return sv;
     }
     return FGuid.fromReader(cursor).value;
   }

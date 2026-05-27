@@ -127,6 +127,12 @@ export class StructValue {
     const startOff = cursor.pos();
     try {
       const stream = PropertyStream.fromReader(cursor, isFinite(sizeHint) ? startOff + sizeHint : Infinity, { ctx });
+      // No post-condition check on cursor position here: `sizeHint` is a
+      // LOOSE upper bound when called from ArrayProperty<Struct>'s element
+      // loop (each element terminates with None and leaves the remainder
+      // for subsequent elements). The tight-budget case (StructProperty
+      // top-level) is caught by Property.fromReader's outer size-mismatch
+      // throw, which already names the offending property.
       return new StructValue(structName, { form: 'propStream', stream });
     } catch (e) {
       // Snapshot the full element wire bytes for verbatim re-emit, then
