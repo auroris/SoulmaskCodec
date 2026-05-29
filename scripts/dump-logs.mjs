@@ -121,81 +121,27 @@ function renderText(t) {
   }
 }
 
-// NPC work-log `Type` -> English template. Derived by cross-referencing the
-// in-game work-log panel against the ParamArrayTxt placeholders: {0}, {1}, ...
-// are ParamArrayTxt elements by position. Most observed Types are mapped and
-// verified against the in-game English panel; any unmapped Type falls back to a
-// raw placeholder render. The per-type punctuation is reproduced verbatim from
-// the game (it is genuinely inconsistent between types). These are
-// English-locale templates (Soulmask localizes the work log per language).
-const WORK_LOG_TEMPLATES = {
-  0:  '{0} work started',
-  1:  '{0} work paused',
-  4:  'Withdraw {1} from <{0}>.',
-  5:  'Go collect in <{0}>({1}).',
-  6:  'Go collect resources in <{0}>.',
-  7:  'Go to <{0}> and manage nearby fields.',
-  9:  'Attend to the Crafting Table in <{0}>.',
-  11: 'Place {1} in <{0}> to stop (reason: {2})',
-  12: 'Withdraw {1} from <{0}> to stop (reason: {2})',
-  13: 'Stops collecting at <{0}> {1} (reason: {3}.).',
-  14: 'Collect resources at <{0}> to stop (reason: {1}.).',
-  15: 'Manage surrounding farmlands at <{0}> to stop (reason: {1}).',
-  16: 'Stop attending to the Crafting Table (reason: {1}.)',
-  22: 'Maintain the camp in <{0}>.',
-  23: 'Maintain the camp at <{0}> to stop (reason: {1}).',
-  25: 'Go to <{0}> and manage nearby pens.',
-  26: 'Manage and stop the pens around <{0}> (reason: {1}.).',
-  29: 'Sort items at <{0}>',
-  30: 'Stopped sorting items at <{0}> (reason: {1}.)',
-  33: 'Go to <{0}> to collect loot',
-  34: 'Stopped collecting loot at <{0}> (Reason: {1}.)',
-};
+// Work-log and clan-log `Type` -> localized format string, keyed by enum value
+// (as a string). Mined from the game's own localization by SoulmaskDataMiner (the
+// "Log" miner) and shipped in the translation tables, so there is nothing to
+// hand-maintain here. {0}, {1}, ... are ParamArrayTxt elements by position; an
+// unmapped Type - e.g. a clan event the game emits no log line for - falls back to
+// a raw param join in renderLogMessage. These resolve to en; import another
+// language's tables to render the logs in that language.
+const WORK_LOG_TEMPLATES = enNames.worklog;
+const CLAN_LOG_TEMPLATES = enNames.clanlog;
 
-// Clan-log `Type` -> English template (GameMode GongHuiMap > ArrayRiZhi). Same
-// {N} placeholder convention and verify-against-the-game discipline as the work
-// log above. The subject param renders as "Name ( Account )" / "Name < Account >"
-// from the FText format itself; enemy / unit-archetype names that embed rarity
-// or tier modifiers (Elite, Leader, tribe prefixes) may stay zh - they are
-// composed at display time, not single table entries. Types 28/29 also carry
-// optional attacker-account and damage-source params (a GameplayEffect class
-// the game shows as e.g. [Sandstorm] / [#Soulmask]); only the common
-// creature-attacker form is templated. All 23 Types observed in this save are
-// mapped and verified in-game; any unseen Type falls back to a raw param join.
-const CLAN_LOG_TEMPLATES = {
-  14: '{0} is killed by {1} , {2}.',
-  15: '{0} successfully recruited a tribesman {1}.',
-  17: '{0} dismantled building "{1}".',
-  19: 'The building {0} has been destroyed from decay.',
-  20: '{0} respawned.',
-  28: '{0} is severely injured by {1} , {2} and near-death.',
-  29: '{0} is severely injured and died.',
-  30: '{0} is severely injured from falling and enters the near-death state.',
-  31: '{0} died from falling.',
-  32: '{0} gets overtired and enters the near-death state.',
-  33: '{0} died of overwork.',
-  36: '{0} assigned {1} to {2}.',
-  37: '{0} dismissed tribesman {1}.',
-  38: '{0} started to remodel {1}.',
-  39: '{0} remodeled.',
-  46: '{0} obtained {1} through continuous self-improvement.',
-  47: '{0} removed {1} through continuous adjustment.',
-  48: '{0} (located in {1}, {2}, {3}) is being attacked by barbarian tribes, go help them!',
-  52: 'Through relentless weapon practice, "{0}" learned new mastery skill "{1}"',
-  62: '{0} put the animal(s) in {1}',
-  63: '{0} removed the animal(s) from {1}',
-  68: 'After relentless training, tribesman {0} raised the proficiency cap of [{1}] to Lv.{2}!',
-  78: '{0} dismantled ship {1}',
-};
-
-// Soulmask localizes work-log name params (historyType-0 FTexts) by FText key;
-// wscodec extracts only their zh `sourceString` (the game's native culture).
-// The per-language translation tables ARE the game's own loc export, and the
-// zh/en tables share keys - so a zh-value -> en-value bridge resolves every
-// name they cover (buildings, stations, item categories, ...) for free.
+// Soulmask localizes name/reason params (historyType-0 FTexts) by FText key;
+// wscodec extracts only their zh `sourceString` (the game's native culture). The
+// per-language tables share keys, so a zh-value -> en-value bridge resolves every
+// name and task-state reason they cover (buildings, stations, item categories,
+// reasons, ...) for free. The log-template categories are excluded: they are keyed
+// by Type and looked up directly above, not bridged by param value.
 const NAME_ZH_EN = (() => {
   const map = {};
+  const skip = new Set(['worklog', 'clanlog']);
   for (const cat of Object.keys(enNames)) {
+    if (skip.has(cat)) continue;
     const en = enNames[cat], zh = zhNames[cat];
     if (!en || !zh) continue;
     for (const key of Object.keys(en)) {
@@ -206,21 +152,10 @@ const NAME_ZH_EN = (() => {
   return map;
 })();
 
-// Task-state reason strings live in FText namespace "WS" (keys RenWuState_*),
-// which the game-data export does NOT include - so these stay hand-mapped,
-// keyed by zh source text and verified against the in-game English panel.
-const REASONS = {
-  '无目标':   'No target',
-  '缺材料':   'Need material',
-  '缺种子':   'Need seed',
-  '空间不足': 'Insufficient space',
-  '目标太远': 'The target is too far.',
-};
-
-// zh source string -> English: prefer the data-export name tables, then the
-// hand-mapped reasons, else pass through (player-typed names are culture-
+// zh source string -> English: resolve via the data-export tables (names and
+// task-state reasons), else pass through (player-typed names are culture-
 // invariant and already display-ready).
-const localizeParam = (s) => NAME_ZH_EN[s] ?? REASONS[s] ?? s;
+const localizeParam = (s) => NAME_ZH_EN[s] ?? s;
 
 // Render one log entry's message: localize each ParamArrayTxt element, then
 // substitute into the Type's template when known, else join the raw params.

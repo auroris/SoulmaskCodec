@@ -105,6 +105,11 @@ const SOURCES = [
   { cat: 'tattoos',       files: ['WenShen/WenShen.csv'],        keyCols: ['head_m', 'head_f', 'chest_m', 'chest_f', 'arm_m', 'arm_f', 'leg_m', 'leg_f'], nameCol: 'name', keyKind: 'raw' },
   { cat: 'gifts',         files: (lang) => csvsIn(lang, 'Gift'), keyCols: ['Level 1', 'Level 2', 'Level 3'], nameCol: 'Title', keyKind: 'raw' },
   { cat: 'settings',      files: ['XiShu/XiShu_0.csv', 'XiShu/XiShu_1.csv', 'XiShu/XiShu_2.csv'], keyCols: ['name'], nameCol: 'desc', keyKind: 'raw' },
+  // Activity-log format strings, keyed by enum value (worklog/clanlog) or task-state
+  // member name (reasons). Used by scripts/dump-logs.mjs to render save-game logs.
+  { cat: 'worklog',       files: ['Log/WorkLog.csv'],            keyCols: ['id'],   nameCol: 'name', keyKind: 'raw' },
+  { cat: 'clanlog',       files: ['Log/ClanLog.csv'],            keyCols: ['id'],   nameCol: 'name', keyKind: 'raw' },
+  { cat: 'reasons',       files: ['Log/Reason.csv'],             keyCols: ['key'],  nameCol: 'name', keyKind: 'raw' },
 ];
 
 // Build the full name-table object for one language.
