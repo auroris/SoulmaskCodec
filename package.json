@@ -23,10 +23,64 @@
       "default": "./src/primitives.mjs"
     },
     "./translations": {
-      "types": "./dist/types/translations.d.mts",
-      "import": "./src/translations.mjs",
-      "require": "./dist/wscodec-translations.cjs",
-      "default": "./src/translations.mjs"
+      "types": "./dist/types/translations.core.d.mts",
+      "import": "./src/translations.core.mjs",
+      "require": "./dist/wscodec-translations.core.cjs",
+      "default": "./src/translations.core.mjs"
+    },
+    "./translations/de": {
+      "types": "./dist/types/translations.de.d.mts",
+      "import": "./src/translations.de.mjs",
+      "require": "./dist/wscodec-translations.de.cjs",
+      "default": "./src/translations.de.mjs"
+    },
+    "./translations/en": {
+      "types": "./dist/types/translations.en.d.mts",
+      "import": "./src/translations.en.mjs",
+      "require": "./dist/wscodec-translations.en.cjs",
+      "default": "./src/translations.en.mjs"
+    },
+    "./translations/es": {
+      "types": "./dist/types/translations.es.d.mts",
+      "import": "./src/translations.es.mjs",
+      "require": "./dist/wscodec-translations.es.cjs",
+      "default": "./src/translations.es.mjs"
+    },
+    "./translations/fr": {
+      "types": "./dist/types/translations.fr.d.mts",
+      "import": "./src/translations.fr.mjs",
+      "require": "./dist/wscodec-translations.fr.cjs",
+      "default": "./src/translations.fr.mjs"
+    },
+    "./translations/ja": {
+      "types": "./dist/types/translations.ja.d.mts",
+      "import": "./src/translations.ja.mjs",
+      "require": "./dist/wscodec-translations.ja.cjs",
+      "default": "./src/translations.ja.mjs"
+    },
+    "./translations/ko": {
+      "types": "./dist/types/translations.ko.d.mts",
+      "import": "./src/translations.ko.mjs",
+      "require": "./dist/wscodec-translations.ko.cjs",
+      "default": "./src/translations.ko.mjs"
+    },
+    "./translations/pt": {
+      "types": "./dist/types/translations.pt.d.mts",
+      "import": "./src/translations.pt.mjs",
+      "require": "./dist/wscodec-translations.pt.cjs",
+      "default": "./src/translations.pt.mjs"
+    },
+    "./translations/ru": {
+      "types": "./dist/types/translations.ru.d.mts",
+      "import": "./src/translations.ru.mjs",
+      "require": "./dist/wscodec-translations.ru.cjs",
+      "default": "./src/translations.ru.mjs"
+    },
+    "./translations/zh": {
+      "types": "./dist/types/translations.zh.d.mts",
+      "import": "./src/translations.zh.mjs",
+      "require": "./dist/wscodec-translations.zh.cjs",
+      "default": "./src/translations.zh.mjs"
     }
   },
   "files": [

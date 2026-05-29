@@ -8,5 +8,5 @@
 
 - [io](io/README.md)
 - [primitives](primitives/README.md)
-- [translations](translations/README.md)
+- [translations.core](translations.core/README.md)
 - [wscodec](wscodec/README.md)

@@ -87,10 +87,11 @@ jsDelivr serve it directly from the npm package:
 </script>
 ```
 
-Translations ship as a separate bundle on `window.wscodecTranslations`:
+Translations ship as a separate per-language bundle on `window.wscodecTranslations`
+(pick the language file you need - `en`, `de`, `es`, `fr`, `ja`, `ko`, `pt`, `ru`, `zh`):
 
 ```html
-<script src="https://unpkg.com/wscodec/dist/wscodec-translations.global.js"></script>
+<script src="https://unpkg.com/wscodec/dist/wscodec-translations.en.global.js"></script>
 <script>
   wscodecTranslations.item('/Game/Blueprints/.../BP_WuQi_Dao_2_C');
 </script>
@@ -130,10 +131,12 @@ round-trip tests check equality.
 
 ### Translations
 
-Optional name lookups for the IDs and class names Soulmask uses:
+Optional name lookups for the IDs and class names Soulmask uses. Import the
+language you want - `en`, `de`, `es`, `fr`, `ja`, `ko`, `pt`, `ru`, or `zh`;
+each subpath exposes the same API:
 
 ```js
-import { translate, item, npc, recipe } from 'wscodec/translations';
+import { translate, item, npc, recipe } from 'wscodec/translations/en';
 
 item('/Game/Blueprints/DaoJu/.../BP_WuQi_Dao_2.BP_WuQi_Dao_2_C'); // 'Beast Bone Blade'
 npc('BP_DongWu_Base_C');                                          // NPC display name
@@ -144,12 +147,18 @@ translate('BP_WuQi_Dao_2_C');                                     // 'Beast Bone
 translate(100011, 'gifts');                                       // disambiguate by table
 ```
 
+There is no default language - the subpath is the language selector. To switch
+language at runtime, dynamically import the one you need
+(`await import('wscodec/translations/' + lang)`). To bind your own table set,
+`createTranslations(tables)` is available from the locale-neutral
+`wscodec/translations`.
+
 Tables: `items`, `npcs`, `buildings`, `recipes`, `proficiencies`, `mastery`,
 `attributes`, `fashion`, `tattoos`, `gifts`, `settings`, `categories`. Display
 names only, no descriptions, icons, or stats.
 
-The tables are generated from the game's data export and committed in
-`src/translations.data.mjs`. Regenerate after a game patch with
+Each language's tables are generated from the game's data export and committed
+as `src/translations.data.<lang>.mjs`. Regenerate after a game patch with
 `npm run build-translations` (see "Regenerating translations" below).
 
 ## Scripts
@@ -167,7 +176,7 @@ that write files default the output path next to the input.
 | `node scripts/find-string.mjs <world.db> <needle> [--limit N]` | Substring search across every decoded blob (StrProperty, NameProperty, FText, etc.). Reports actor serial and property path for each hit. Useful for locating an in-game object you can recognize by a string. |
 | `node scripts/npc-log-survey.mjs <world.db> [--tz-offset -6]` | Find the NPC with the most diverse set of work-log `Type` codes and print the most-recent entry for each. Used to cross-reference Type codes against the in-game text. |
 | `node scripts/build.mjs` (`npm run build`) | Build the `dist/` bundles via esbuild. Runs automatically on `npm publish`. |
-| `node scripts/build-translations.mjs` (`npm run build-translations`) | Regenerate `src/translations.data.mjs` from the CSV export in `ext/` (see below). |
+| `node scripts/build-translations.mjs` (`npm run build-translations`) | Regenerate the per-language `src/translations.data.<lang>.mjs` tables from the CSV exports in `ext/<lang>/` (see below). |
 
 The `test-edit-*.mjs` scripts in `scripts/` are edit recipes
 against specific in-game objects (a named chest, a specific NPC's log,
@@ -176,13 +185,18 @@ for the expected before/after.
 
 ### Regenerating translations
 
-The translation tables ship pre-generated in `src/translations.data.mjs`
-To rebuild from a fresh game patch:
+The translation tables ship pre-generated as `src/translations.data.<lang>.mjs`,
+one per language. To rebuild from a fresh game patch:
 
 1. Generate the CSV export with
    [SoulmaskDataMiner](https://github.com/auroris/SoulmaskDataMiner).
-2. Drop the export into `ext/` at the repo root (gitignored).
+2. Drop each language export into `ext/<lang>/` at the repo root (gitignored),
+   e.g. `ext/en/`, `ext/de/`. Languages are auto-discovered from these folders.
 3. Run `npm run build-translations`.
+
+Adding a language also needs a one-line `src/translations.<lang>.mjs` wrapper
+and a matching `./translations/<lang>` entry in package.json `exports`; the
+build prints a reminder if a language has data but no wrapper.
 
 ## Tests
 
